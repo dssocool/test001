@@ -41,7 +41,7 @@ def _write_header_file(data_path, temp_dir, delimiter):
             return None
         base = os.path.basename(data_path)
         name = base.rsplit(".", 1)[0] if "." in base else base
-        header_name = f"{name}_header.csv"
+        header_name = f"{name}_{uuid.uuid4().hex[:8]}.csv"
         header_path = os.path.join(temp_dir, header_name)
         with open(header_path, "w", newline="", encoding="utf-8") as f:
             for col in first_row:
