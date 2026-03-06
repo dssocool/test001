@@ -80,6 +80,11 @@ form textarea { min-height: 100px; }
 .source-panel .field-group label { display: block; font-size: 0.9rem; font-weight: 500; color: #374151; margin-bottom: 0.35rem; }
 .source-panel .field-group input,
 .source-panel .field-group select { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; }
+.source-panel .field-group-checkbox { display: flex; flex-direction: column; }
+.source-panel .field-group-checkbox .checkbox-label { display: block; margin-bottom: 0.35rem; font-size: 0.9rem; font-weight: 500; color: #374151; }
+.source-panel .field-group-checkbox input[type="checkbox"] { width: auto; min-width: 1rem; height: 1rem; margin: 0; padding: 0; flex-shrink: 0; }
+.source-panel .field-group-checkbox .checkbox-wrap { display: flex; align-items: center; min-height: 2.25rem; }
+.source-panel .field-group-checkbox .checkbox-wrap input { margin-right: 0.35rem; }
 .source-panel .validate-btn-wrap { flex-shrink: 0; }
 .flow-form-actions { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; }
 

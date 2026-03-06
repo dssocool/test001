@@ -5,6 +5,20 @@ import uuid
 local_bp = Blueprint("local_bp", __name__)
 
 
+@local_bp.route("/detect", methods=["POST"])
+def detect():
+    """Run file type and CSV-attribute detection on the first 8KB. Returns detected values for form pre-fill."""
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"ok": False, "error": "No filename"}), 400
+    chunk = f.read(8192)
+    from app.services.file_detection import detect_file
+    result = detect_file(chunk)
+    return jsonify({"ok": True, **result})
+
+
 @local_bp.route("/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
