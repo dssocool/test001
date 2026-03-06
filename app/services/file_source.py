@@ -24,7 +24,7 @@ def save_upload_top10(file_storage, delimiter, temp_dir, has_header=True, end_of
             reader = csv.reader(StringIO(text), delimiter=delimiter)
             rows = list(reader)
             if has_header and rows:
-                data_rows = rows[1:11]
+                data_rows = rows[0:11]
             else:
                 data_rows = rows[:10]
             if not orig_name.lower().endswith(".csv"):
