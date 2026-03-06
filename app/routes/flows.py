@@ -30,24 +30,70 @@ def _render_flow_step1(app, domain_id, flow_config, temp_dir, delphix_error=None
     )
 
 
+def _parse_has_header(value):
+    if value is None:
+        return None
+    v = str(value).strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
+def _parse_end_of_record(value):
+    if value is None:
+        return None
+    v = str(value).strip().lower()
+    if v in ("crlf", "\\r\\n", "windows", "win"):
+        return "\r\n"
+    if v in ("lf", "\\n", "linux", "unix"):
+        return "\n"
+    return None
+
+
 def _handle_step1_local_upload(domain_id):
-    """Handle step 1 submit when source is local: upload file, build config, store in session. Returns True if handled."""
+    """Handle step 1 submit when source is local: detect file, upload, build config, store in session. Returns True if handled."""
     if "file" not in request.files or not request.files["file"].filename:
         return False
     f = request.files["file"]
-    delimiter = request.form.get("local_delimiter", ",")
+    chunk = f.read(8192)
+    from app.services.file_detection import detect_file
+    detected = detect_file(chunk)
+    try:
+        f.stream.seek(0)
+    except Exception:
+        pass
+    file_type = request.form.get("local_file_type") or detected.get("file_type") or "csv"
+    delimiter = request.form.get("local_delimiter")
+    if delimiter is None or delimiter == "":
+        delimiter = detected.get("delimiter", ",")
+    has_header = _parse_has_header(request.form.get("local_has_header"))
+    if has_header is None:
+        has_header = detected.get("has_header", True)
+    end_of_record = _parse_end_of_record(request.form.get("local_end_of_record"))
+    if end_of_record is None:
+        end_of_record = detected.get("end_of_record", "\n")
     temp_base = current_app.config["TEMP_BASE"]
     os.makedirs(temp_base, exist_ok=True)
     subdir = os.path.join(temp_base, str(uuid.uuid4()))
     os.makedirs(subdir, exist_ok=True)
     from app.services.file_source import save_upload_top10
-    ok, result = save_upload_top10(f, delimiter, subdir)
+    ok, result = save_upload_top10(
+        f, delimiter, subdir,
+        has_header=has_header,
+        end_of_record=end_of_record,
+        file_type=file_type,
+    )
     if not ok:
         return False
     session[SESSION_FLOW_CONFIG] = {
         "source_type": "local",
         "upload_name": f.filename,
+        "file_type": file_type,
         "delimiter": delimiter,
+        "has_header": has_header,
+        "end_of_record": end_of_record,
     }
     session[SESSION_TEMP_DIR] = subdir
     return True
@@ -66,11 +112,12 @@ def new(domain_id):
             if _handle_step1_local_upload(domain_id):
                 cfg = session.get(SESSION_FLOW_CONFIG) or {}
                 temp_dir = session.get(SESSION_TEMP_DIR) or ""
-                ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
-                if not ok:
-                    return _render_flow_step1(current_app, domain_id, cfg, temp_dir, result)
-                cfg["delphix"] = result
-                session[SESSION_FLOW_CONFIG] = cfg
+                if cfg.get("file_type") == "csv":
+                    ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
+                    if not ok:
+                        return _render_flow_step1(current_app, domain_id, cfg, temp_dir, result)
+                    cfg["delphix"] = result
+                    session[SESSION_FLOW_CONFIG] = cfg
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
             # Local file: back from step 2 with no new file — keep existing session and go to step 2
             cfg = session.get(SESSION_FLOW_CONFIG) or {}

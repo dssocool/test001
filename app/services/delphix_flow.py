@@ -27,10 +27,11 @@ def _list_csv_files(temp_dir):
     return out
 
 
-def _write_header_file(data_path, temp_dir, delimiter):
+def _write_header_file(data_path, temp_dir, delimiter, has_header=True):
     """
-    Read first row (column names) from data_path and write a header file in temp_dir
-    with one column name per line.
+    Build a header file in temp_dir with one column name per line.
+    If has_header: first row of data_path = column names.
+    If not has_header: use col1, col2, ... from first row column count.
     Returns path to the header file, or None on error.
     """
     try:
@@ -39,12 +40,16 @@ def _write_header_file(data_path, temp_dir, delimiter):
             first_row = next(reader, None)
         if not first_row:
             return None
+        if has_header:
+            col_names = first_row
+        else:
+            col_names = [f"col{i + 1}" for i in range(len(first_row))]
         base = os.path.basename(data_path)
         name = base.rsplit(".", 1)[0] if "." in base else base
         header_name = f"{name}_{uuid.uuid4().hex[:8]}.csv"
         header_path = os.path.join(temp_dir, header_name)
         with open(header_path, "w", newline="", encoding="utf-8") as f:
-            for col in first_row:
+            for col in col_names:
                 f.write(col + "\n")
         return header_path
     except Exception:
@@ -66,7 +71,8 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
         return False, "No CSV files found in temp directory"
 
     delimiter = flow_config.get("delimiter") or ","
-    end_of_record = "\r\n"
+    end_of_record = flow_config.get("end_of_record") or "\r\n"
+    has_header = flow_config.get("has_header", True)
 
     config = load_delphix_config(instance_path)
     if not config:
@@ -80,12 +86,12 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
     # 1) Build header file per CSV
     header_paths = []
     for _name, data_path in csv_files:
-        hp = _write_header_file(data_path, temp_dir, delimiter)
+        hp = _write_header_file(data_path, temp_dir, delimiter, has_header=has_header)
         if not hp:
             return False, f"Could not create header file for {data_path}"
         header_paths.append(hp)
 
-    # 2) Create file format per file
+    # 2) Create file format per file; then set header=0 if no header row
     file_format_ids = []
     try:
         for hp in header_paths:
@@ -94,6 +100,8 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
             if ff_id is None:
                 return False, "Delphix file format response missing id"
             file_format_ids.append(ff_id)
+            if not has_header:
+                client.update_file_format(ff_id, header=False)
     except DelphixClientError as e:
         return False, f"Delphix file format: {e}"
 

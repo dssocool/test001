@@ -127,22 +127,38 @@
   <div id="panel-local" class="source-panel">
     <div class="field-group">
       <label for="local-file">Upload file</label>
-      <input type="file" id="local-file" name="file" accept=".csv,.txt">
+      <input type="file" id="local-file" name="file" accept=".csv,.txt,.json,.xml,.parquet">
       {% if flow_config.source_type == 'local' and flow_config.upload_name %}
       <p class="local-uploaded-hint">Uploaded: <strong>{{ flow_config.upload_name }}</strong>. Click Next to continue or choose a different file.</p>
       {% endif %}
     </div>
-    <div class="field-row">
+    <div class="field-group">
+      <label for="local-file-type">File type</label>
+      <select id="local-file-type" name="local_file_type">
+        <option value="csv" {{ 'selected' if (flow_config.source_type == 'local' and flow_config.get('file_type') == 'csv') or (not flow_config.get('file_type')) else '' }}>CSV</option>
+        <option value="json" {{ 'selected' if flow_config.source_type == 'local' and flow_config.get('file_type') == 'json' else '' }}>JSON</option>
+        <option value="xml" {{ 'selected' if flow_config.source_type == 'local' and flow_config.get('file_type') == 'xml' else '' }}>XML</option>
+        <option value="parquet" {{ 'selected' if flow_config.source_type == 'local' and flow_config.get('file_type') == 'parquet' else '' }}>Parquet</option>
+      </select>
+    </div>
+    <div id="local-csv-options" class="field-row">
       <div class="field-group">
-        <label for="local-file-type">File type</label>
-        <select id="local-file-type"><option value="csv">CSV</option></select>
+        <label for="local-has-header">Has header row</label>
+        <input type="checkbox" id="local-has-header" name="local_has_header" value="1" {{ 'checked' if flow_config.source_type != 'local' or flow_config.get('has_header', True) else '' }}>
       </div>
       <div class="field-group">
         <label for="local-delimiter">Delimiter</label>
         <input type="text" id="local-delimiter" name="local_delimiter" value="{{ flow_config.delimiter if flow_config.source_type == 'local' else ',' }}" maxlength="2">
       </div>
+      <div class="field-group">
+        <label for="local-end-of-record">End of record</label>
+        <select id="local-end-of-record" name="local_end_of_record">
+          <option value="crlf" {{ 'selected' if flow_config.get('end_of_record') == '\r\n' else '' }}>Windows (CRLF)</option>
+          <option value="lf" {{ 'selected' if flow_config.get('end_of_record', '\n') != '\r\n' else '' }}>Linux (LF)</option>
+        </select>
+      </div>
     </div>
-    <p class="step-hint">Click &quot;Next&quot; to upload and continue.</p>
+    <p class="step-hint">Click &quot;Next&quot; to upload and continue. File type and CSV options are detected automatically; you can adjust them before continuing.</p>
   </div>
 
   <div class="flow-form-actions">
@@ -168,6 +184,10 @@
   <div class="delphix-results-section" style="margin-top:1.5rem;">
     <h3>Delphix results</h3>
     <div id="delphix-results-container"><p>Loading…</p></div>
+  </div>
+  {% elif flow_config.source_type == 'local' and flow_config.get('file_type') and flow_config.get('file_type') != 'csv' %}
+  <div class="delphix-results-section" style="margin-top:1.5rem;">
+    <p class="step-hint">Delphix integration is only available for CSV sources. This flow uses {{ flow_config.file_type }}.</p>
   </div>
   {% endif %}
   <div class="flow-form-actions">
@@ -443,8 +463,16 @@
       {% elif flow_config.source_type == 'local' %}
       <dt>File</dt>
       <dd>{{ flow_config.upload_name or 'Uploaded file' }}</dd>
+      <dt>File type</dt>
+      <dd>{{ flow_config.get('file_type') or 'csv' }}</dd>
+      {% if flow_config.get('file_type') == 'csv' %}
+      <dt>Has header</dt>
+      <dd>{{ 'Yes' if flow_config.get('has_header', True) else 'No' }}</dd>
       <dt>Delimiter</dt>
       <dd>{{ flow_config.delimiter or ',' }}</dd>
+      <dt>End of record</dt>
+      <dd>{{ 'Windows (CRLF)' if flow_config.get('end_of_record') == '\r\n' else 'Linux (LF)' }}</dd>
+      {% endif %}
       {% endif %}
     </dl>
   </div>
@@ -497,6 +525,13 @@
     });
   });
   document.getElementById('local-file').addEventListener('change', enableNext);
+  function toggleLocalCsvOptions() {
+    var sel = document.getElementById('local-file-type');
+    var opts = document.getElementById('local-csv-options');
+    if (sel && opts) opts.style.display = (sel.value === 'csv') ? '' : 'none';
+  }
+  document.getElementById('local-file-type').addEventListener('change', toggleLocalCsvOptions);
+  toggleLocalCsvOptions();
   enableNext();
 
   document.querySelectorAll('input[name="sql-mode"]').forEach(function(r) {

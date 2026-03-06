@@ -77,6 +77,21 @@ class DelphixClient:
             )
         return body
 
+    def _put_json(self, path, json_body):
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        resp = self._session.put(url, json=json_body, timeout=60)
+        try:
+            body = resp.json() if resp.text else {}
+        except ValueError:
+            body = None
+        if not resp.ok:
+            raise DelphixClientError(
+                f"Delphix API error: {resp.status_code}",
+                status_code=resp.status_code,
+                response_body=body or resp.text,
+            )
+        return body
+
     def _post_multipart(self, path, files, data):
         url = f"{self.base_url}/{path.lstrip('/')}"
         # Don't set Content-Type; requests sets it with boundary for multipart
@@ -106,6 +121,13 @@ class DelphixClient:
         # Normalize response key
         ff_id = out.get("fileFormatId") or out.get("id")
         return {**out, "file_format_id": ff_id}
+
+    def update_file_format(self, file_format_id, header):
+        """
+        PUT /file-formats/{id}. Set header=1 or 0 for CSV file format.
+        """
+        body = {"fileFormatId": str(file_format_id), "header": 1 if header else 0}
+        return self._put_json(f"file-formats/{file_format_id}", body)
 
     def create_file_ruleset(self, ruleset_name, file_connector_id):
         """
