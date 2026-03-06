@@ -6,14 +6,27 @@ and returns all IDs to store in flow config.
 """
 import csv
 import os
+import re
+import time
 import uuid
 
 from app.services.azure_blob import upload_file
 from app.services.delphix_client import DelphixClient, DelphixClientError, load_delphix_config
 
+# Temp header files created for Delphix file format have names like {base}_{8 hex}.csv
+_HEADER_FILE_PATTERN = re.compile(r"^.*_[0-9a-f]{8}\.csv$", re.IGNORECASE)
+
+# Max seconds to wait for profile or masking job before timing out
+_EXECUTION_TIMEOUT_SECONDS = 600
+
+
+def _is_header_file(name):
+    """Return True if name matches the temp header file pattern (exclude from data list)."""
+    return bool(_HEADER_FILE_PATTERN.match(name))
+
 
 def _list_csv_files(temp_dir):
-    """Return sorted list of (name, path) for CSV files in temp_dir."""
+    """Return sorted list of (name, path) for data CSV files in temp_dir. Excludes temp header files."""
     if not temp_dir or not os.path.isdir(temp_dir):
         return []
     out = []
@@ -22,6 +35,8 @@ def _list_csv_files(temp_dir):
         if not os.path.isfile(path):
             continue
         if not name.lower().endswith(".csv"):
+            continue
+        if _is_header_file(name):
             continue
         out.append((name, path))
     return out
@@ -170,16 +185,54 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
     except DelphixClientError as e:
         return False, f"Delphix jobs: {e}"
 
-    # 7) Run profile job then masking job
+    # 7) Run profile job, poll until SUCCEEDED, then run masking job and poll until SUCCEEDED
     profile_execution_id = None
     masking_execution_id = None
     try:
         run_profile = client.run_job(profile_job_id)
         profile_execution_id = run_profile.get("execution_id")
+        if not profile_execution_id:
+            return False, "Delphix profile run response missing executionId"
+    except DelphixClientError as e:
+        return False, f"Delphix run profile job: {e}"
+
+    deadline = time.monotonic() + _EXECUTION_TIMEOUT_SECONDS
+    while True:
+        if time.monotonic() > deadline:
+            return False, "Profile job timed out"
+        time.sleep(1)
+        try:
+            exec_resp = client.get_execution(profile_execution_id)
+        except DelphixClientError as e:
+            return False, f"Delphix get profile execution: {e}"
+        status = (exec_resp.get("status") or "").strip().upper()
+        if status == "SUCCEEDED":
+            break
+        if status in ("FAILED", "ERROR", "CANCELLED", "CANCELED"):
+            return False, f"Profile job failed with status: {status}"
+
+    try:
         run_masking = client.run_job(masking_job_id)
         masking_execution_id = run_masking.get("execution_id")
+        if not masking_execution_id:
+            return False, "Delphix masking run response missing executionId"
     except DelphixClientError as e:
-        return False, f"Delphix run job: {e}"
+        return False, f"Delphix run masking job: {e}"
+
+    deadline = time.monotonic() + _EXECUTION_TIMEOUT_SECONDS
+    while True:
+        if time.monotonic() > deadline:
+            return False, "Masking job timed out"
+        time.sleep(1)
+        try:
+            exec_resp = client.get_execution(masking_execution_id)
+        except DelphixClientError as e:
+            return False, f"Delphix get masking execution: {e}"
+        status = (exec_resp.get("status") or "").strip().upper()
+        if status == "SUCCEEDED":
+            break
+        if status in ("FAILED", "ERROR", "CANCELLED", "CANCELED"):
+            return False, f"Masking job failed with status: {status}"
 
     result = {
         "file_format_ids": file_format_ids,
@@ -189,5 +242,6 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
         "masking_job_id": masking_job_id,
         "profile_execution_id": profile_execution_id,
         "masking_execution_id": masking_execution_id,
+        "blob_names": blob_names,
     }
     return True, result

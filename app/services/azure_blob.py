@@ -31,3 +31,14 @@ def upload_file(account_name, container_name, access_key, local_path, blob_name=
     with open(local_path, "rb") as f:
         blob_client.upload_blob(f, overwrite=True)
     return blob_name
+
+
+def download_blob(account_name, container_name, access_key, blob_name):
+    """
+    Download the blob by name from the given container. Returns the blob content as bytes.
+    """
+    client = _blob_client(account_name, access_key)
+    container_client = client.get_container_client(container_name)
+    blob_client = container_client.get_blob_client(blob_name)
+    download = blob_client.download_blob()
+    return download.readall()

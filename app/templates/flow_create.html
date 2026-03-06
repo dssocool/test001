@@ -212,6 +212,15 @@
       container.innerHTML = '<p class="error">No temp data. Go back and complete step 1.</p>';
       return;
     }
+    var blobNames = [];
+    var delphixEl = document.getElementById('delphix-config');
+    if (delphixEl) {
+      try {
+        var c = JSON.parse(delphixEl.textContent);
+        blobNames = c.blob_names || [];
+      } catch (e) {}
+    }
+    var delimiterParam = {{ (flow_config.get('delimiter') or ',')|tojson }};
     var chevronSvg = '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
     function escapeHtml(s) {
       var div = document.createElement('div');
@@ -241,6 +250,7 @@
       var f = file;
       if (!f.rows || !f.rows.length) return '<p>No rows</p>';
       var headers = f.rows[0];
+      var useMasked = f.maskedRows && f.maskedRows.length > 0;
       var html = '<table class="dry-run-compare-table"><thead><tr>';
       headers.forEach(function(cell) {
         html += '<th class="col-original">' + escapeHtml(String(cell)) + ' <span class="th-label">(original)</span></th>';
@@ -249,9 +259,13 @@
       html += '</tr></thead><tbody>';
       for (var i = 1; i < f.rows.length; i++) {
         html += '<tr>';
-        f.rows[i].forEach(function(cell, colIndex) {
+        var origRow = f.rows[i];
+        var maskRow = useMasked && f.maskedRows[i] ? f.maskedRows[i] : null;
+        origRow.forEach(function(cell, colIndex) {
           var method = (rules && rules[colIndex]) ? rules[colIndex] : 'synthesize';
-          var display = applyRulesToCell(cell, method);
+          var display = (maskRow && maskRow[colIndex] !== undefined)
+            ? String(maskRow[colIndex])
+            : applyRulesToCell(cell, method);
           html += '<td class="col-original">' + escapeHtml(String(cell)) + '</td>';
           html += '<td class="col-synthetic">' + escapeHtml(display) + '</td>';
         });
@@ -308,11 +322,42 @@
     function onDataLoaded(data) {
       if (!data.ok || !data.files || !data.files.length) {
         container.innerHTML = '<p>No files to display.</p>';
+        if (triggerBtn) triggerBtn.disabled = false;
         return;
       }
       filesData = data;
-      renderDryRunList(true);
-      if (triggerBtn) triggerBtn.disabled = false;
+      if (blobNames.length === 0) {
+        renderDryRunList(true);
+        if (triggerBtn) triggerBtn.disabled = false;
+        return;
+      }
+      var pending = filesData.files.length;
+      filesData.files.forEach(function(file, i) {
+        file.maskedRows = [];
+        if (i >= blobNames.length) {
+          if (--pending === 0) { renderDryRunList(true); if (triggerBtn) triggerBtn.disabled = false; }
+          return;
+        }
+        var blobName = blobNames[i];
+        var url = '/api/dry-run/masked-file?blob_name=' + encodeURIComponent(blobName) + (delimiterParam ? '&delimiter=' + encodeURIComponent(delimiterParam) : '');
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(maskData) {
+            if (maskData.ok && maskData.rows && maskData.rows.length) {
+              file.maskedRows = maskData.rows;
+            }
+            if (--pending === 0) {
+              renderDryRunList(true);
+              if (triggerBtn) triggerBtn.disabled = false;
+            }
+          })
+          .catch(function() {
+            if (--pending === 0) {
+              renderDryRunList(true);
+              if (triggerBtn) triggerBtn.disabled = false;
+            }
+          });
+      });
     }
     function loadData() {
       if (!tempDir) return;
@@ -328,14 +373,7 @@
     }
     function runDryRun() {
       if (!tempDir) return;
-      if (!filesData || !filesData.files.length) {
-        loadData();
-        return;
-      }
-      if (triggerBtn) triggerBtn.disabled = true;
-      renderDryRunList(true);
-      if (triggerBtn) triggerBtn.disabled = false;
-      showSyntheticAnimation();
+      loadData();
     }
     loadData();
     if (triggerBtn) triggerBtn.addEventListener('click', runDryRun);
