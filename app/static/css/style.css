@@ -132,6 +132,10 @@ form textarea { min-height: 100px; }
 .rule-modal-row select { min-width: 140px; padding: 0.35rem 0.5rem; }
 .dry-run-list table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .dry-run-list th, .dry-run-list td { border: 1px solid #ddd; padding: 0.35rem 0.5rem; text-align: left; }
+.field-rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.field-rules-table th, .field-rules-table td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
+.field-rules-table th { background: #f8f9fa; }
+.field-rules-table tbody tr:nth-child(even) { background: #f8f9fa; }
 .dry-run-list th { background: #f8f9fa; }
 
 .summary dl { margin: 0; }

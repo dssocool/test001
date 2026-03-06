@@ -233,3 +233,24 @@ class DelphixClient:
                 response_body=body or resp.text,
             )
         return body
+
+    def get_file_field_metadata(self, file_format_id, page_number=1):
+        """
+        GET /file-field-metadata?file_format_id={id}&page_number={page}.
+        Returns dict with _pageInfo and responseList (list of field metadata:
+        fileFieldMetadataId, fieldName, fieldPositionNumber, algorithmName, domainName, isMasked, etc.).
+        """
+        url = f"{self.base_url}/file-field-metadata"
+        params = {"file_format_id": int(file_format_id), "page_number": int(page_number)}
+        resp = self._session.get(url, params=params, timeout=30)
+        try:
+            body = resp.json() if resp.text else {}
+        except ValueError:
+            body = None
+        if not resp.ok:
+            raise DelphixClientError(
+                f"Delphix API error: {resp.status_code}",
+                status_code=resp.status_code,
+                response_body=body or resp.text,
+            )
+        return body

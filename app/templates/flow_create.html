@@ -213,11 +213,13 @@
       return;
     }
     var blobNames = [];
+    var fileFormatIds = [];
     var delphixEl = document.getElementById('delphix-config');
     if (delphixEl) {
       try {
         var c = JSON.parse(delphixEl.textContent);
         blobNames = c.blob_names || [];
+        fileFormatIds = c.file_format_ids || [];
       } catch (e) {}
     }
     var delimiterParam = {{ (flow_config.get('delimiter') or ',')|tojson }};
@@ -281,7 +283,7 @@
         html += '<li><details class="dry-run-details"' + (expandedByDefault ? ' open' : '') + '><summary class="file-summary-row">';
         html += '<span class="expand-icon-wrap">' + chevronSvg + '</span>';
         html += '<span class="file-name">' + escapeHtml(f.name) + '</span>';
-        html += '<button type="button" class="btn btn-small rule-setup-btn" data-file-index="' + fileIndex + '">Rule Setup</button>';
+        html += '<button type="button" class="btn btn-small rule-setup-btn" data-file-index="' + fileIndex + '">Field Rules</button>';
         html += '</summary><div class="file-preview" data-file-index="' + fileIndex + '">';
         html += renderFileTable(fileIndex, f, rules);
         html += '</div></details></li>';
@@ -381,11 +383,10 @@
       var overlay = document.createElement('div');
       overlay.id = 'rule-setup-modal-overlay';
       overlay.className = 'rule-modal-overlay';
-      overlay.innerHTML = '<div class="rule-modal"><div class="rule-modal-header"><h3 id="rule-modal-title">Rule Setup</h3><button type="button" class="rule-modal-close">&times;</button></div><div class="rule-modal-body"><div id="rule-modal-columns"></div></div><div class="rule-modal-footer"><button type="button" class="btn rule-modal-apply">Apply</button><button type="button" class="btn btn-secondary rule-modal-cancel">Cancel</button></div></div>';
+      overlay.innerHTML = '<div class="rule-modal"><div class="rule-modal-header"><h3 id="rule-modal-title">Field Rules</h3><button type="button" class="rule-modal-close">&times;</button></div><div class="rule-modal-body"><div id="rule-modal-columns"></div></div><div class="rule-modal-footer"><button type="button" class="btn btn-secondary rule-modal-cancel">Close</button></div></div>';
       overlay.style.display = 'none';
       overlay.querySelector('.rule-modal-close').onclick = closeRuleModal;
       overlay.querySelector('.rule-modal-cancel').onclick = closeRuleModal;
-      overlay.querySelector('.rule-modal-apply').onclick = applyRuleModal;
       overlay.onclick = function(e) { if (e.target === overlay) closeRuleModal(); };
       return overlay;
     }
@@ -394,38 +395,45 @@
       if (!filesData || !filesData.files[fileIndex]) return;
       var f = filesData.files[fileIndex];
       currentRuleFileIndex = fileIndex;
-      document.getElementById('rule-modal-title').textContent = 'Rule Setup – ' + f.name;
+      document.getElementById('rule-modal-title').textContent = 'Field Rules – ' + escapeHtml(f.name);
       var columnsEl = document.getElementById('rule-modal-columns');
-      var headers = (f.rows && f.rows.length) ? f.rows[0] : [];
-      var existing = fileRules[f.name] || {};
-      columnsEl.innerHTML = '';
-      headers.forEach(function(colName, colIndex) {
-        var method = existing[colIndex] || 'synthesize';
-        var row = document.createElement('div');
-        row.className = 'rule-modal-row';
-        row.innerHTML = '<label class="rule-col-name">' + escapeHtml(String(colName)) + '</label><select class="rule-col-method" data-col-index="' + colIndex + '"><option value="synthesize"' + (method === 'synthesize' ? ' selected' : '') + '>Synthesize</option><option value="remove"' + (method === 'remove' ? ' selected' : '') + '>Remove</option><option value="unchanged"' + (method === 'unchanged' ? ' selected' : '') + '>Unchanged</option></select>';
-        columnsEl.appendChild(row);
-      });
+      var fileFormatId = fileFormatIds[fileIndex];
+      if (fileFormatId == null) {
+        columnsEl.innerHTML = '<p class="error">No file format ID for this file. Field rules are available after Delphix runs.</p>';
+        document.getElementById('rule-setup-modal-overlay').style.display = 'flex';
+        return;
+      }
+      columnsEl.innerHTML = '<p>Loading field metadata…</p>';
       document.getElementById('rule-setup-modal-overlay').style.display = 'flex';
+      fetch('/api/delphix/file-field-metadata?file_format_id=' + encodeURIComponent(fileFormatId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) {
+            columnsEl.innerHTML = '<p class="error">' + escapeHtml(data.error || 'Failed to load field metadata') + '</p>';
+            return;
+          }
+          var list = data.responseList || [];
+          if (!list.length) {
+            columnsEl.innerHTML = '<p>No fields returned.</p>';
+            return;
+          }
+          var table = '<table class="field-rules-table"><thead><tr><th>Field</th><th>Position</th><th>Algorithm</th><th>Domain</th><th>Masked</th></tr></thead><tbody>';
+          list.forEach(function(field) {
+            var alg = field.algorithmName != null ? escapeHtml(String(field.algorithmName)) : '—';
+            var dom = field.domainName != null ? escapeHtml(String(field.domainName)) : '—';
+            var masked = field.isMasked ? 'Yes' : 'No';
+            table += '<tr><td>' + escapeHtml(String(field.fieldName || '')) + '</td><td>' + (field.fieldPositionNumber != null ? field.fieldPositionNumber : '') + '</td><td>' + alg + '</td><td>' + dom + '</td><td>' + masked + '</td></tr>';
+          });
+          table += '</tbody></table>';
+          columnsEl.innerHTML = table;
+        })
+        .catch(function(err) {
+          columnsEl.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+        });
     }
     function closeRuleModal() {
       document.getElementById('rule-setup-modal-overlay').style.display = 'none';
       currentRuleFileIndex = null;
-    }
-    function applyRuleModal() {
-      if (currentRuleFileIndex === null || !filesData) return;
-      var f = filesData.files[currentRuleFileIndex];
-      var columnsEl = document.getElementById('rule-modal-columns');
-      var selects = columnsEl.querySelectorAll('.rule-col-method');
-      var rules = {};
-      selects.forEach(function(sel) {
-        var colIndex = parseInt(sel.getAttribute('data-col-index'), 10);
-        rules[colIndex] = sel.value;
-      });
-      fileRules[f.name] = rules;
-      var previewEl = container.querySelector('.file-preview[data-file-index="' + currentRuleFileIndex + '"]');
-      if (previewEl) previewEl.innerHTML = renderFileTable(currentRuleFileIndex, f, rules);
-      closeRuleModal();
     }
   })();
 </script>

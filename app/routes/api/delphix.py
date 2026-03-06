@@ -48,3 +48,23 @@ def status():
         "profile": profile_result,
         "masking": masking_result,
     })
+
+
+@delphix_bp.route("/file-field-metadata", methods=["GET"])
+def file_field_metadata():
+    """
+    GET ?file_format_id=... Returns Delphix file field metadata (responseList, _pageInfo)
+    for algorithm setup display. file_format_id comes from flow config delphix.file_format_ids.
+    """
+    file_format_id = request.args.get("file_format_id", type=int)
+    if file_format_id is None:
+        return jsonify({"ok": False, "error": "file_format_id required"}), 400
+    config = load_delphix_config(current_app.config["INSTANCE_PATH"])
+    if not config:
+        return jsonify({"ok": False, "error": "Delphix not configured"}), 400
+    try:
+        client = DelphixClient(config)
+        data = client.get_file_field_metadata(file_format_id, page_number=1)
+    except DelphixClientError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "responseList": data.get("responseList", []), "_pageInfo": data.get("_pageInfo", {})})
