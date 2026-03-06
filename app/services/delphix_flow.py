@@ -29,7 +29,8 @@ def _list_csv_files(temp_dir):
 
 def _write_header_file(data_path, temp_dir, delimiter):
     """
-    Read first row from data_path and write it as a header-only CSV in temp_dir.
+    Read first row (column names) from data_path and write a header file in temp_dir
+    with one column name per line.
     Returns path to the header file, or None on error.
     """
     try:
@@ -43,8 +44,8 @@ def _write_header_file(data_path, temp_dir, delimiter):
         header_name = f"{name}_header.csv"
         header_path = os.path.join(temp_dir, header_name)
         with open(header_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f, delimiter=delimiter)
-            writer.writerow(first_row)
+            for col in first_row:
+                f.write(col + "\n")
         return header_path
     except Exception:
         return None
