@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Synthetic Data Generator{% endblock %}
+{% block content %}
+<h1>Synthetic Data Flows</h1>
+<p><a href="{{ url_for('domains_bp.new') }}" class="btn">Create domain</a></p>
+
+{% for domain in domains %}
+<section class="card domain-section">
+  <div class="domain-header">
+    <span class="domain-name domain-name-badge">{{ domain.name }}</span>
+    <div class="domain-actions">
+      <a href="{{ url_for('domains_bp.edit', domain_id=domain.id) }}" class="btn btn-secondary">Edit</a>
+      <form method="post" action="{{ url_for('domains_bp.delete', domain_id=domain.id) }}" class="domain-delete-form" onsubmit="return confirm('Delete this domain and its data flows?');">
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+      <a href="{{ url_for('flows_bp.new', domain_id=domain.id) }}" class="btn btn-secondary">Create data flow</a>
+    </div>
+  </div>
+  <ul class="flows">
+    {% for flow in domain.flows %}
+    <li class="flow-item">
+      <span class="flow-name">{{ flow.name or 'Flow #' ~ flow.id }}</span>
+      <div class="flow-actions">
+        <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="btn btn-small btn-secondary">Edit</a>
+        <form method="post" action="{{ url_for('flows_bp.delete_flow_route', domain_id=domain.id, flow_id=flow.id) }}" class="flow-delete-form" onsubmit="return confirm('Delete this data flow?');">
+          <button type="submit" class="btn btn-small btn-danger">Delete</button>
+        </form>
+      </div>
+    </li>
+    {% else %}
+    <li><em>No data flows yet.</em></li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<p>No domains yet. <a href="{{ url_for('domains_bp.new') }}">Create a domain</a> to get started.</p>
+{% endfor %}
+{% endblock %}

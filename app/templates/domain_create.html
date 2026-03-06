@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Create domain{% endblock %}
+{% block content %}
+<h1>Create domain</h1>
+<form method="post" action="{{ url_for('domains_bp.new') }}">
+  <label for="name">Domain name</label>
+  <input type="text" id="name" name="name" required placeholder="e.g. Sales">
+  <div class="form-actions">
+    <button type="submit" class="btn">Save</button>
+    <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

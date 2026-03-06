@@ -1,0 +1,654 @@
+{% extends "base.html" %}
+{% block title %}{% if edit_flow_id %}Edit{% else %}Create{% endif %} data flow – {{ domain.name }}{% endblock %}
+{% block content %}
+{% if edit_flow_id %}
+  {% set form_action = url_for('flows_bp.edit', domain_id=domain.id, flow_id=edit_flow_id) %}
+{% else %}
+  {% set form_action = url_for('flows_bp.new', domain_id=domain.id) %}
+{% endif %}
+<div class="flow-page">
+<h1>{% if edit_flow_id %}Edit{% else %}Create{% endif %} data flow</h1>
+<p class="domain-badge">Domain: <strong>{{ domain.name }}</strong></p>
+
+<div class="flow-step-wrapper">
+<div class="flow-steps">
+  <div class="flow-step {% if step == 1 %}step-current{% elif step > 1 %}step-done{% endif %}">
+    <div class="flow-step-inner">
+      <span class="step-circle">1</span>
+      <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="1"/><rect x="2" y="14" width="20" height="8" rx="1"/><path d="M6 6v2M6 18v2M18 6v2M18 18v2"/></svg>
+      <span class="step-label">Data Source</span>
+    </div>
+  </div>
+  <div class="flow-step {% if step == 2 %}step-current{% elif step > 2 %}step-done{% endif %}">
+    <div class="flow-step-inner">
+      <span class="step-circle">2</span>
+      <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18M7 7l10 10M17 7L7 17"/></svg>
+      <span class="step-label">Test &amp; Dry Run</span>
+    </div>
+  </div>
+  <div class="flow-step {% if step == 3 %}step-current{% endif %}">
+    <div class="flow-step-inner">
+      <span class="step-circle">3</span>
+      <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      <span class="step-label">Review &amp; Confirm</span>
+    </div>
+  </div>
+</div>
+
+{% if step == 1 %}
+<div class="step-content step-content-active">
+{% if delphix_error %}
+  <p class="error">Delphix: {{ delphix_error }}</p>
+{% endif %}
+<form id="step1-form" method="post" action="{{ form_action }}" enctype="multipart/form-data">
+  <input type="hidden" name="step" value="1">
+  <input type="hidden" name="config" id="step1-config">
+  <input type="hidden" name="temp_dir" id="step1-temp-dir">
+
+  <span class="source-section-label">Data Source</span>
+  <div class="source-tabs">
+    <button type="button" class="source-tab active" data-source="sql">
+      <svg class="source-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      SQL Server
+    </button>
+    <button type="button" class="source-tab" data-source="blob">
+      <svg class="source-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+      Azure Blob
+    </button>
+    <button type="button" class="source-tab" data-source="local">
+      <svg class="source-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+      Local file
+    </button>
+  </div>
+
+  <div id="panel-sql" class="source-panel active">
+    <div class="field-row">
+      <div class="field-group">
+        <label for="sql-server">Server Address</label>
+        <input type="text" id="sql-server" placeholder="e.g. myserver.database.windows.net">
+      </div>
+      <div class="field-group">
+        <label for="sql-database">Database Name</label>
+        <input type="text" id="sql-database" placeholder="Database name">
+      </div>
+      <div class="validate-btn-wrap">
+        <button type="button" id="sql-validate" class="btn">Validate connection</button>
+      </div>
+    </div>
+    <span id="sql-validate-msg" class="error"></span>
+    <div id="sql-after-validate" style="display:none; margin-top:1rem;">
+      <label><input type="radio" name="sql-mode" value="tables" checked> Export multiple tables</label>
+      <label><input type="radio" name="sql-mode" value="query"> Export by query</label>
+      <div id="sql-tables-box" style="margin-top:0.5rem;">
+        <label>Select tables</label>
+        <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
+        <button type="button" id="sql-export-tables" class="btn" style="margin-top:0.5rem;">Export top 10 rows</button>
+      </div>
+      <div id="sql-query-box" style="margin-top:0.5rem; display:none;">
+        <label>Query</label>
+        <textarea id="sql-query" placeholder="SELECT * FROM ..."></textarea>
+        <button type="button" id="sql-export-query" class="btn">Run and export top 10 rows</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-blob" class="source-panel">
+    <div class="field-row">
+      <div class="field-group">
+        <label for="blob-account">Account name</label>
+        <input type="text" id="blob-account" placeholder="Storage account name">
+      </div>
+      <div class="field-group">
+        <label for="blob-container">Container name</label>
+        <input type="text" id="blob-container" placeholder="Container name">
+      </div>
+      <div class="field-group">
+        <label for="blob-key">Account key</label>
+        <input type="password" id="blob-key" placeholder="Account key">
+      </div>
+      <div class="validate-btn-wrap">
+        <button type="button" id="blob-validate" class="btn">Validate connection</button>
+      </div>
+    </div>
+    <span id="blob-validate-msg" class="error"></span>
+    <div id="blob-after-validate" style="display:none; margin-top:1rem;">
+      <label>File type</label>
+      <select id="blob-file-type"><option value="csv">CSV</option></select>
+      <label>Prefix (optional)</label>
+      <input type="text" id="blob-prefix" placeholder="e.g. data/">
+      <label>Delimiter</label>
+      <input type="text" id="blob-delimiter" value="," maxlength="2">
+      <label>Select files</label>
+      <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
+      <button type="button" id="blob-prepare" class="btn" style="margin-top:0.5rem;">Prepare dry run (top 10 rows per file)</button>
+    </div>
+  </div>
+
+  <div id="panel-local" class="source-panel">
+    <div class="field-group">
+      <label for="local-file">Upload file</label>
+      <input type="file" id="local-file" name="file" accept=".csv,.txt">
+      {% if flow_config.source_type == 'local' and flow_config.upload_name %}
+      <p class="local-uploaded-hint">Uploaded: <strong>{{ flow_config.upload_name }}</strong>. Click Next to continue or choose a different file.</p>
+      {% endif %}
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label for="local-file-type">File type</label>
+        <select id="local-file-type"><option value="csv">CSV</option></select>
+      </div>
+      <div class="field-group">
+        <label for="local-delimiter">Delimiter</label>
+        <input type="text" id="local-delimiter" name="local_delimiter" value="{{ flow_config.delimiter if flow_config.source_type == 'local' else ',' }}" maxlength="2">
+      </div>
+    </div>
+    <p class="step-hint">Click &quot;Next&quot; to upload and continue.</p>
+  </div>
+
+  <div class="flow-form-actions">
+    <button type="submit" id="step1-next" class="btn" disabled>Next</button>
+    <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+</div>
+{% endif %}
+{% if step == 2 %}
+<div class="step-content step-content-active">
+<form method="post" action="{{ form_action }}">
+  <input type="hidden" name="step" value="2">
+  <div class="dry-run-section">
+    <button type="button" id="dry-run-trigger-btn" class="btn">Dry Run</button>
+    <p class="dry-run-hint">Click Dry Run to regenerate synthetic data with animation.</p>
+  </div>
+  <div id="dry-run-container">
+    <p>Loading data…</p>
+  </div>
+  {% if flow_config.get('delphix') %}
+  <script type="application/json" id="delphix-config">{{ flow_config.delphix|tojson }}</script>
+  <div class="delphix-results-section" style="margin-top:1.5rem;">
+    <h3>Delphix results</h3>
+    <div id="delphix-results-container"><p>Loading…</p></div>
+  </div>
+  {% endif %}
+  <div class="flow-form-actions">
+    <button type="submit" class="btn">Next</button>
+    <a href="{{ form_action }}" class="btn btn-secondary">Back</a>
+  </div>
+</form>
+</div>
+{% endif %}
+{% if step == 2 %}
+<script>
+  (function() {
+    var tempDir = {{ temp_dir|tojson }};
+    var container = document.getElementById('dry-run-container');
+    var triggerBtn = document.getElementById('dry-run-trigger-btn');
+    if (!container) return;
+    if (!tempDir) {
+      var section = document.querySelector('.dry-run-section');
+      if (section) section.innerHTML = '';
+      container.innerHTML = '<p class="error">No temp data. Go back and complete step 1.</p>';
+      return;
+    }
+    var chevronSvg = '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+    function escapeHtml(s) {
+      var div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+    function scramble(str) {
+      if (str === null || str === undefined) return '';
+      var s = String(str);
+      var a = s.split('');
+      for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+      }
+      return a.join('');
+    }
+    var filesData = null;
+    var fileRules = {};
+    function applyRulesToCell(value, method) {
+      if (method === 'remove') return '[removed]';
+      if (method === 'unchanged') return value;
+      return scramble(value);
+    }
+    function renderFileTable(fileIndex, file, rules) {
+      var f = file;
+      if (!f.rows || !f.rows.length) return '<p>No rows</p>';
+      var headers = f.rows[0];
+      var html = '<table class="dry-run-compare-table"><thead><tr>';
+      headers.forEach(function(cell) {
+        html += '<th class="col-original">' + escapeHtml(String(cell)) + ' <span class="th-label">(original)</span></th>';
+        html += '<th class="col-synthetic">' + escapeHtml(String(cell)) + ' <span class="th-label">(synthetic)</span></th>';
+      });
+      html += '</tr></thead><tbody>';
+      for (var i = 1; i < f.rows.length; i++) {
+        html += '<tr>';
+        f.rows[i].forEach(function(cell, colIndex) {
+          var method = (rules && rules[colIndex]) ? rules[colIndex] : 'synthesize';
+          var display = applyRulesToCell(cell, method);
+          html += '<td class="col-original">' + escapeHtml(String(cell)) + '</td>';
+          html += '<td class="col-synthetic">' + escapeHtml(display) + '</td>';
+        });
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      return html;
+    }
+    function buildListItems(data, expandedByDefault) {
+      var html = '';
+      data.files.forEach(function(f, fileIndex) {
+        var rules = fileRules[f.name] || null;
+        html += '<li><details class="dry-run-details"' + (expandedByDefault ? ' open' : '') + '><summary class="file-summary-row">';
+        html += '<span class="expand-icon-wrap">' + chevronSvg + '</span>';
+        html += '<span class="file-name">' + escapeHtml(f.name) + '</span>';
+        html += '<button type="button" class="btn btn-small rule-setup-btn" data-file-index="' + fileIndex + '">Rule Setup</button>';
+        html += '</summary><div class="file-preview" data-file-index="' + fileIndex + '">';
+        html += renderFileTable(fileIndex, f, rules);
+        html += '</div></details></li>';
+      });
+      return html;
+    }
+    function attachListHandlers() {
+      container.querySelectorAll('.rule-setup-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var fileIndex = parseInt(btn.getAttribute('data-file-index'), 10);
+          openRuleModal(fileIndex);
+        });
+      });
+      container.querySelectorAll('details summary').forEach(function(summary) {
+        summary.addEventListener('click', function(e) {
+          if (e.target.classList.contains('rule-setup-btn') || e.target.closest('.rule-setup-btn')) e.preventDefault();
+        });
+      });
+    }
+    function showSyntheticAnimation() {
+      var cells = container.querySelectorAll('.dry-run-compare-table .col-synthetic');
+      cells.forEach(function(cell) { cell.classList.add('synthetic-updated'); });
+      setTimeout(function() {
+        cells.forEach(function(cell) { cell.classList.remove('synthetic-updated'); });
+      }, 1200);
+    }
+    function renderDryRunList(expandedByDefault) {
+      if (!filesData || !filesData.files.length) return;
+      var listHtml = '<ul class="dry-run-list">' + buildListItems(filesData, expandedByDefault !== false) + '</ul>';
+      var hadModal = container.querySelector('#rule-setup-modal-overlay');
+      if (hadModal) hadModal.remove();
+      container.innerHTML = listHtml;
+      container.appendChild(createRuleModal());
+      attachListHandlers();
+    }
+    function onDataLoaded(data) {
+      if (!data.ok || !data.files || !data.files.length) {
+        container.innerHTML = '<p>No files to display.</p>';
+        return;
+      }
+      filesData = data;
+      renderDryRunList(true);
+      if (triggerBtn) triggerBtn.disabled = false;
+    }
+    function loadData() {
+      if (!tempDir) return;
+      if (triggerBtn) triggerBtn.disabled = true;
+      container.innerHTML = '<p>Loading data…</p>';
+      fetch('/api/dry-run/files?temp_dir=' + encodeURIComponent(tempDir))
+        .then(function(r) { return r.json(); })
+        .then(onDataLoaded)
+        .catch(function(err) {
+          if (triggerBtn) triggerBtn.disabled = false;
+          container.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+        });
+    }
+    function runDryRun() {
+      if (!tempDir) return;
+      if (!filesData || !filesData.files.length) {
+        loadData();
+        return;
+      }
+      if (triggerBtn) triggerBtn.disabled = true;
+      renderDryRunList(true);
+      if (triggerBtn) triggerBtn.disabled = false;
+      showSyntheticAnimation();
+    }
+    loadData();
+    if (triggerBtn) triggerBtn.addEventListener('click', runDryRun);
+    function createRuleModal() {
+      var overlay = document.createElement('div');
+      overlay.id = 'rule-setup-modal-overlay';
+      overlay.className = 'rule-modal-overlay';
+      overlay.innerHTML = '<div class="rule-modal"><div class="rule-modal-header"><h3 id="rule-modal-title">Rule Setup</h3><button type="button" class="rule-modal-close">&times;</button></div><div class="rule-modal-body"><div id="rule-modal-columns"></div></div><div class="rule-modal-footer"><button type="button" class="btn rule-modal-apply">Apply</button><button type="button" class="btn btn-secondary rule-modal-cancel">Cancel</button></div></div>';
+      overlay.style.display = 'none';
+      overlay.querySelector('.rule-modal-close').onclick = closeRuleModal;
+      overlay.querySelector('.rule-modal-cancel').onclick = closeRuleModal;
+      overlay.querySelector('.rule-modal-apply').onclick = applyRuleModal;
+      overlay.onclick = function(e) { if (e.target === overlay) closeRuleModal(); };
+      return overlay;
+    }
+    var currentRuleFileIndex = null;
+    function openRuleModal(fileIndex) {
+      if (!filesData || !filesData.files[fileIndex]) return;
+      var f = filesData.files[fileIndex];
+      currentRuleFileIndex = fileIndex;
+      document.getElementById('rule-modal-title').textContent = 'Rule Setup – ' + f.name;
+      var columnsEl = document.getElementById('rule-modal-columns');
+      var headers = (f.rows && f.rows.length) ? f.rows[0] : [];
+      var existing = fileRules[f.name] || {};
+      columnsEl.innerHTML = '';
+      headers.forEach(function(colName, colIndex) {
+        var method = existing[colIndex] || 'synthesize';
+        var row = document.createElement('div');
+        row.className = 'rule-modal-row';
+        row.innerHTML = '<label class="rule-col-name">' + escapeHtml(String(colName)) + '</label><select class="rule-col-method" data-col-index="' + colIndex + '"><option value="synthesize"' + (method === 'synthesize' ? ' selected' : '') + '>Synthesize</option><option value="remove"' + (method === 'remove' ? ' selected' : '') + '>Remove</option><option value="unchanged"' + (method === 'unchanged' ? ' selected' : '') + '>Unchanged</option></select>';
+        columnsEl.appendChild(row);
+      });
+      document.getElementById('rule-setup-modal-overlay').style.display = 'flex';
+    }
+    function closeRuleModal() {
+      document.getElementById('rule-setup-modal-overlay').style.display = 'none';
+      currentRuleFileIndex = null;
+    }
+    function applyRuleModal() {
+      if (currentRuleFileIndex === null || !filesData) return;
+      var f = filesData.files[currentRuleFileIndex];
+      var columnsEl = document.getElementById('rule-modal-columns');
+      var selects = columnsEl.querySelectorAll('.rule-col-method');
+      var rules = {};
+      selects.forEach(function(sel) {
+        var colIndex = parseInt(sel.getAttribute('data-col-index'), 10);
+        rules[colIndex] = sel.value;
+      });
+      fileRules[f.name] = rules;
+      var previewEl = container.querySelector('.file-preview[data-file-index="' + currentRuleFileIndex + '"]');
+      if (previewEl) previewEl.innerHTML = renderFileTable(currentRuleFileIndex, f, rules);
+      closeRuleModal();
+    }
+  })();
+</script>
+<script>
+  (function() {
+    var configEl = document.getElementById('delphix-config');
+    var containerEl = document.getElementById('delphix-results-container');
+    if (!configEl || !containerEl) return;
+    var delphixConfig;
+    try {
+      delphixConfig = JSON.parse(configEl.textContent);
+    } catch (e) {
+      containerEl.innerHTML = '<p class="error">Invalid Delphix config.</p>';
+      return;
+    }
+    fetch('/api/delphix/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile_execution_id: delphixConfig.profile_execution_id || null,
+        masking_execution_id: delphixConfig.masking_execution_id || null
+      })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (!data.ok) {
+        containerEl.innerHTML = '<p class="error">' + (data.error || 'Failed to load status') + '</p>';
+        return;
+      }
+      function fmtExec(exec) {
+        if (!exec) return '<p>No execution data.</p>';
+        if (exec.error) return '<p class="error">' + exec.error + '</p>';
+        var parts = ['<p><strong>Status:</strong> ' + (exec.status || '—') + '</p>'];
+        if (exec.rowsMasked != null) parts.push('<p>Rows masked: ' + exec.rowsMasked + '</p>');
+        if (exec.rowsTotal != null) parts.push('<p>Rows total: ' + exec.rowsTotal + '</p>');
+        if (exec.startTime) parts.push('<p>Start: ' + exec.startTime + '</p>');
+        if (exec.endTime) parts.push('<p>End: ' + exec.endTime + '</p>');
+        return '<div class="delphix-job-result">' + parts.join('') + '</div>';
+      }
+      var html = '<div class="delphix-results"><h4>Profile job</h4>' + fmtExec(data.profile) + '<h4>Masking job</h4>' + fmtExec(data.masking) + '</div>';
+      containerEl.innerHTML = html;
+    }).catch(function(err) {
+      containerEl.innerHTML = '<p class="error">Error: ' + (err.message || 'Request failed') + '</p>';
+    });
+  })();
+</script>
+{% endif %}
+{% if step == 3 %}
+<div class="step-content step-content-active">
+<form method="post" action="{{ form_action }}">
+  <input type="hidden" name="step" value="3">
+  <label>Flow name (optional)</label>
+  <input type="text" name="name" value="{{ flow.name if flow else (default_flow_name|default('Flow 1')) }}" placeholder="e.g. Sales export">
+  <div class="summary card" style="margin-top:1rem;">
+    <h3>Summary</h3>
+    <dl>
+      <dt>Domain</dt>
+      <dd>{{ domain.name }}</dd>
+      <dt>Source type</dt>
+      <dd>{{ flow_config.source_type or '—' }}</dd>
+      {% if flow_config.source_type == 'sql' %}
+      <dt>Server</dt>
+      <dd>{{ flow_config.server or '—' }}</dd>
+      <dt>Database</dt>
+      <dd>{{ flow_config.database or '—' }}</dd>
+      <dt>Export</dt>
+      <dd>{{ flow_config.export_mode or '—' }}{% if flow_config.export_mode == 'tables' %} ({{ flow_config.tables|length or 0 }} tables){% endif %}</dd>
+      {% elif flow_config.source_type == 'blob' %}
+      <dt>Account</dt>
+      <dd>{{ flow_config.account_name or '—' }}</dd>
+      <dt>Container</dt>
+      <dd>{{ flow_config.container or '—' }}</dd>
+      <dt>Prefix</dt>
+      <dd>{{ flow_config.prefix or '—' }}</dd>
+      <dt>Delimiter</dt>
+      <dd>{{ flow_config.delimiter or ',' }}</dd>
+      {% elif flow_config.source_type == 'local' %}
+      <dt>File</dt>
+      <dd>{{ flow_config.upload_name or 'Uploaded file' }}</dd>
+      <dt>Delimiter</dt>
+      <dd>{{ flow_config.delimiter or ',' }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+  <div class="flow-form-actions">
+    <button type="submit" class="btn">{% if edit_flow_id %}Save changes{% else %}Confirm and save{% endif %}</button>
+    <a href="{{ form_action }}?step=2" class="btn btn-secondary">Back</a>
+  </div>
+</form>
+</div>
+{% endif %}
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if step == 1 %}
+<script>
+(function() {
+  var domainId = {{ domain.id }};
+  var step1Config = {};
+  var step1TempDir = '';
+
+  function isLocalPanelActive() {
+    return document.getElementById('panel-local').classList.contains('active');
+  }
+  var localHasPreviousUpload = {{ 'true' if (flow_config.source_type == 'local' and flow_config.upload_name and temp_dir) else 'false' }};
+  function enableNext() {
+    var nextBtn = document.getElementById('step1-next');
+    if (isLocalPanelActive()) {
+      var fileInput = document.getElementById('local-file');
+      var hasFile = fileInput.files && fileInput.files.length > 0;
+      nextBtn.disabled = !(hasFile || localHasPreviousUpload);
+      document.getElementById('step1-config').value = '';
+      document.getElementById('step1-temp-dir').value = '';
+    } else {
+      nextBtn.disabled = !(step1Config.source_type && step1TempDir);
+      document.getElementById('step1-config').value = JSON.stringify(step1Config);
+      document.getElementById('step1-temp-dir').value = step1TempDir;
+    }
+  }
+
+  document.querySelectorAll('.source-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.source-tab').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.source-panel').forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      var src = btn.getAttribute('data-source');
+      document.getElementById('panel-' + src).classList.add('active');
+      enableNext();
+    });
+  });
+  document.getElementById('local-file').addEventListener('change', enableNext);
+  enableNext();
+
+  document.querySelectorAll('input[name="sql-mode"]').forEach(function(r) {
+    r.addEventListener('change', function() {
+      var isTables = document.getElementById('sql-tables-box');
+      var isQuery = document.getElementById('sql-query-box');
+      if (this.value === 'tables') {
+        isTables.style.display = 'block';
+        isQuery.style.display = 'none';
+      } else {
+        isTables.style.display = 'none';
+        isQuery.style.display = 'block';
+      }
+    });
+  });
+
+  document.getElementById('sql-validate').addEventListener('click', function() {
+    var server = document.getElementById('sql-server').value.trim();
+    var database = document.getElementById('sql-database').value.trim();
+    var msg = document.getElementById('sql-validate-msg');
+    msg.textContent = '';
+    fetch('/api/sql/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server: server, database: database })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) {
+        msg.textContent = 'Connected.';
+        msg.className = 'success';
+        document.getElementById('sql-after-validate').style.display = 'block';
+        fetch('/api/sql/tables?server=' + encodeURIComponent(server) + '&database=' + encodeURIComponent(database))
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.ok && d.tables) {
+              var sel = document.getElementById('sql-tables');
+              sel.innerHTML = '';
+              d.tables.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                sel.appendChild(opt);
+              });
+            }
+          });
+      } else {
+        msg.textContent = data.error || 'Connection failed';
+        msg.className = 'error';
+      }
+    }).catch(function(e) {
+      msg.textContent = e.message || 'Request failed';
+      msg.className = 'error';
+    });
+  });
+
+  document.getElementById('sql-export-tables').addEventListener('click', function() {
+    var server = document.getElementById('sql-server').value.trim();
+    var database = document.getElementById('sql-database').value.trim();
+    var sel = document.getElementById('sql-tables');
+    var tables = [].map.call(sel.selectedOptions, function(o) { return o.value; });
+    if (!tables.length) return;
+    fetch('/api/sql/export-tables', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server: server, database: database, tables: tables })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) {
+        step1Config = { source_type: 'sql', server: server, database: database, export_mode: 'tables', tables: tables };
+        step1TempDir = data.temp_dir;
+        enableNext();
+      }
+    });
+  });
+
+  document.getElementById('sql-export-query').addEventListener('click', function() {
+    var server = document.getElementById('sql-server').value.trim();
+    var database = document.getElementById('sql-database').value.trim();
+    var query = document.getElementById('sql-query').value.trim();
+    if (!query) return;
+    fetch('/api/sql/export-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server: server, database: database, query: query })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) {
+        step1Config = { source_type: 'sql', server: server, database: database, export_mode: 'query', query: query };
+        step1TempDir = data.temp_dir;
+        enableNext();
+      }
+    });
+  });
+
+  document.getElementById('blob-validate').addEventListener('click', function() {
+    var account = document.getElementById('blob-account').value.trim();
+    var container = document.getElementById('blob-container').value.trim();
+    var key = document.getElementById('blob-key').value.trim();
+    var msg = document.getElementById('blob-validate-msg');
+    msg.textContent = '';
+    fetch('/api/blob/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_name: account, container: container, key: key })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) {
+        msg.textContent = 'Connected. ' + (data.blobs && data.blobs.length) + ' file(s) found.';
+        msg.className = 'success';
+        document.getElementById('blob-after-validate').style.display = 'block';
+        var sel = document.getElementById('blob-list');
+        sel.innerHTML = '';
+        (data.blobs || []).forEach(function(b) {
+          var opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          sel.appendChild(opt);
+        });
+      } else {
+        msg.textContent = data.error || 'Connection failed';
+        msg.className = 'error';
+      }
+    }).catch(function(e) {
+      msg.textContent = e.message || 'Request failed';
+      msg.className = 'error';
+    });
+  });
+
+  document.getElementById('blob-prepare').addEventListener('click', function() {
+    var account = document.getElementById('blob-account').value.trim();
+    var container = document.getElementById('blob-container').value.trim();
+    var key = document.getElementById('blob-key').value.trim();
+    var prefix = document.getElementById('blob-prefix').value.trim();
+    var fileType = document.getElementById('blob-file-type').value;
+    var delimiter = document.getElementById('blob-delimiter').value || ',';
+    var sel = document.getElementById('blob-list');
+    var selected = [].map.call(sel.selectedOptions, function(o) { return o.value; });
+    if (!selected.length) return;
+    fetch('/api/blob/prepare-dry-run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        account_name: account, container: container, key: key,
+        prefix: prefix, file_type: fileType, delimiter: delimiter,
+        selected_blobs: selected
+      })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) {
+        step1Config = { source_type: 'blob', account_name: account, container: container, prefix: prefix, file_type: fileType, delimiter: delimiter, selected_blobs: selected };
+        step1TempDir = data.temp_dir;
+        enableNext();
+      }
+    });
+  });
+
+})();
+</script>
+{% endif %}
+{% endblock %}

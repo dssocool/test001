@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Edit domain{% endblock %}
+{% block content %}
+<h1>Edit domain</h1>
+<form method="post" action="{{ url_for('domains_bp.edit', domain_id=domain.id) }}">
+  <label for="name">Domain name</label>
+  <input type="text" id="name" name="name" value="{{ domain.name }}" required placeholder="e.g. Sales">
+  <div class="form-actions">
+    <button type="submit" class="btn">Save</button>
+    <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

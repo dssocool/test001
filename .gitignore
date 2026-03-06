@@ -1,0 +1,12 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+instance/
+instance/delphix_config.json
+delphix_config.json
+dist/
+build/
+*.spec.log
+.env
+*.db
