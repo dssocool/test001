@@ -7,6 +7,11 @@ import json
 import os
 
 import requests
+from urllib3 import disable_warnings
+from urllib3.exceptions import InsecureRequestWarning
+
+# Suppress warning when SSL verification is disabled for Delphix API
+disable_warnings(InsecureRequestWarning)
 
 
 DELPHIX_CONFIG_FILENAME = "delphix_config.json"
@@ -53,6 +58,7 @@ class DelphixClient:
         self.base_url = config["base_url"].rstrip("/")
         self.auth_token = config["auth_token"]
         self._session = requests.Session()
+        self._session.verify = False  # Disable SSL cert verification for Delphix API
         self._session.headers["Accept"] = "application/json"
         self._session.headers["Authorization"] = self.auth_token
 
@@ -75,7 +81,7 @@ class DelphixClient:
         url = f"{self.base_url}/{path.lstrip('/')}"
         # Don't set Content-Type; requests sets it with boundary for multipart
         headers = {k: v for k, v in self._session.headers.items() if k.lower() != "content-type"}
-        resp = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+        resp = requests.post(url, headers=headers, files=files, data=data, timeout=60, verify=False)
         try:
             body = resp.json() if resp.text else {}
         except ValueError:
