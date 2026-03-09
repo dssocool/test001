@@ -7,6 +7,13 @@
   {% set form_action = url_for('flows_bp.new', domain_id=domain.id) %}
 {% endif %}
 <div class="flow-page">
+<nav class="flow-breadcrumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('main_bp.index') }}">Domains</a>
+  <span class="flow-breadcrumbs-sep" aria-hidden="true">&gt;</span>
+  <span>{{ domain.name }}</span>
+  <span class="flow-breadcrumbs-sep" aria-hidden="true">&gt;</span>
+  <span>{% if edit_flow_id %}Edit{% else %}Create{% endif %} Flow</span>
+</nav>
 <h1>{% if edit_flow_id %}Edit{% else %}Create{% endif %} data flow</h1>
 <p class="domain-badge">Domain: <strong>{{ domain.name }}</strong></p>
 
@@ -16,21 +23,21 @@
     <div class="flow-step-inner">
       <span class="step-circle">1</span>
       <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="1"/><rect x="2" y="14" width="20" height="8" rx="1"/><path d="M6 6v2M6 18v2M18 6v2M18 18v2"/></svg>
-      <span class="step-label">Data Source</span>
+      <span class="step-label">1. Source Configuration</span>
     </div>
   </div>
   <div class="flow-step {% if step == 2 %}step-current{% elif step > 2 %}step-done{% endif %}">
     <div class="flow-step-inner">
       <span class="step-circle">2</span>
       <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18M7 7l10 10M17 7L7 17"/></svg>
-      <span class="step-label">Test &amp; Dry Run</span>
+      <span class="step-label">2. Dry Run &amp; Column Mapping</span>
     </div>
   </div>
   <div class="flow-step {% if step == 3 %}step-current{% endif %}">
     <div class="flow-step-inner">
       <span class="step-circle">3</span>
       <svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-      <span class="step-label">Review &amp; Confirm</span>
+      <span class="step-label">3. Review and Create</span>
     </div>
   </div>
 </div>
@@ -40,140 +47,139 @@
 {% if delphix_error %}
   <p class="error">Delphix: {{ delphix_error }}</p>
 {% endif %}
-<form id="step1-form" method="post" action="{{ form_action }}" enctype="multipart/form-data">
-  <input type="hidden" name="step" value="1">
-  <input type="hidden" name="config" id="step1-config">
-  <input type="hidden" name="temp_dir" id="step1-temp-dir">
+<div class="step1-layout">
+  <div class="step1-main">
+    <form id="step1-form" method="post" action="{{ form_action }}" enctype="multipart/form-data">
+      <input type="hidden" name="step" value="1">
+      <input type="hidden" name="config" id="step1-config">
+      <input type="hidden" name="temp_dir" id="step1-temp-dir">
 
-  <span class="source-section-label">Data Source</span>
-  <div class="source-tabs">
-    <button type="button" class="source-tab active" data-source="sql">
-      <svg class="source-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-      SQL Server
-    </button>
-    <button type="button" class="source-tab" data-source="blob">
-      <svg class="source-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
-      Azure Blob
-    </button>
-    <button type="button" class="source-tab" data-source="local">
-      <svg class="source-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-      Local file
-    </button>
-  </div>
+      <h2 class="defined-sources-title">Defined Data Sources</h2>
+      <p class="defined-sources-subtitle">Select Defined Data Source</p>
+      <div class="source-options" role="group" aria-label="Data source type">
+        <label class="source-option-card {% if (flow_config.source_type or 'sql') == 'sql' %}active{% endif %}" data-source="sql">
+          <input type="radio" name="source_type" value="sql" {% if (flow_config.source_type or 'sql') == 'sql' %}checked{% endif %} class="source-option-radio">
+          <span class="source-option-icon source-option-icon-sql">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          </span>
+          <span class="source-option-label">SQL Server</span>
+        </label>
+        <label class="source-option-card {% if flow_config.source_type == 'blob' %}active{% endif %}" data-source="blob">
+          <input type="radio" name="source_type" value="blob" {% if flow_config.source_type == 'blob' %}checked{% endif %} class="source-option-radio">
+          <span class="source-option-icon source-option-icon-blob">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+          </span>
+          <span class="source-option-label">Azure Blob Storage</span>
+        </label>
+      </div>
 
-  <div id="panel-sql" class="source-panel active">
-    <div class="field-row">
-      <div class="field-group">
-        <label for="sql-server">Server Address</label>
-        <input type="text" id="sql-server" placeholder="e.g. myserver.database.windows.net">
-      </div>
-      <div class="field-group">
-        <label for="sql-database">Database Name</label>
-        <input type="text" id="sql-database" placeholder="Database name">
-      </div>
-      <div class="validate-btn-wrap">
-        <button type="button" id="sql-validate" class="btn">Validate connection</button>
-      </div>
-    </div>
-    <span id="sql-validate-msg" class="error"></span>
-    <div id="sql-after-validate" style="display:none; margin-top:1rem;">
-      <label><input type="radio" name="sql-mode" value="tables" checked> Export multiple tables</label>
-      <label><input type="radio" name="sql-mode" value="query"> Export by query</label>
-      <div id="sql-tables-box" style="margin-top:0.5rem;">
-        <label>Select tables</label>
-        <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
-        <button type="button" id="sql-export-tables" class="btn" style="margin-top:0.5rem;">Export top 10 rows</button>
-      </div>
-      <div id="sql-query-box" style="margin-top:0.5rem; display:none;">
-        <label>Query</label>
-        <textarea id="sql-query" placeholder="SELECT * FROM ..."></textarea>
-        <button type="button" id="sql-export-query" class="btn">Run and export top 10 rows</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="panel-blob" class="source-panel">
-    <div class="field-row">
-      <div class="field-group">
-        <label for="blob-account">Account name</label>
-        <input type="text" id="blob-account" placeholder="Storage account name">
-      </div>
-      <div class="field-group">
-        <label for="blob-container">Container name</label>
-        <input type="text" id="blob-container" placeholder="Container name">
-      </div>
-      <div class="field-group">
-        <label for="blob-key">Account key</label>
-        <input type="password" id="blob-key" placeholder="Account key">
-      </div>
-      <div class="validate-btn-wrap">
-        <button type="button" id="blob-validate" class="btn">Validate connection</button>
-      </div>
-    </div>
-    <span id="blob-validate-msg" class="error"></span>
-    <div id="blob-after-validate" style="display:none; margin-top:1rem;">
-      <label>File type</label>
-      <select id="blob-file-type"><option value="csv">CSV</option></select>
-      <label>Prefix (optional)</label>
-      <input type="text" id="blob-prefix" placeholder="e.g. data/">
-      <label>Delimiter</label>
-      <input type="text" id="blob-delimiter" value="," maxlength="2">
-      <label>Select files</label>
-      <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
-      <button type="button" id="blob-prepare" class="btn" style="margin-top:0.5rem;">Prepare dry run (top 10 rows per file)</button>
-    </div>
-  </div>
-
-  <div id="panel-local" class="source-panel">
-    <div class="field-group">
-      <label for="local-file">Upload file</label>
-      <input type="file" id="local-file" name="file" accept=".csv,.txt,.json,.xml,.parquet">
-      {% if flow_config.source_type == 'local' and flow_config.upload_name %}
-      <p class="local-uploaded-hint">Uploaded: <strong>{{ flow_config.upload_name }}</strong>. Click Next to continue or choose a different file.</p>
-      {% endif %}
-    </div>
-    <div class="field-group">
-      <label for="local-file-type">File type</label>
-      <select id="local-file-type" name="local_file_type">
-        <option value="csv" {{ 'selected' if (flow_config.source_type == 'local' and flow_config.get('file_type') == 'csv') or (not flow_config.get('file_type')) else '' }}>CSV</option>
-        <option value="json" {{ 'selected' if flow_config.source_type == 'local' and flow_config.get('file_type') == 'json' else '' }}>JSON</option>
-        <option value="xml" {{ 'selected' if flow_config.source_type == 'local' and flow_config.get('file_type') == 'xml' else '' }}>XML</option>
-        <option value="parquet" {{ 'selected' if flow_config.source_type == 'local' and flow_config.get('file_type') == 'parquet' else '' }}>Parquet</option>
-      </select>
-    </div>
-    <div id="local-csv-options" class="field-row">
-      <div class="field-group field-group-checkbox">
-        <label for="local-has-header" class="checkbox-label">Has header row</label>
-        <div class="checkbox-wrap">
-          <input type="checkbox" id="local-has-header" name="local_has_header" value="1" {{ 'checked' if flow_config.source_type != 'local' or flow_config.get('has_header', True) else '' }}>
+      <div id="panel-sql" class="source-panel {% if (flow_config.source_type or 'sql') == 'sql' %}active{% endif %}">
+        <div class="connection-parameters">
+          <h3 class="connection-parameters-title">Connection parameters</h3>
+          <div class="field-row">
+            <div class="field-group">
+              <label for="sql-server">Server Address</label>
+              <input type="text" id="sql-server" placeholder="Server Address">
+            </div>
+            <div class="field-group">
+              <label for="sql-database">Database Name</label>
+              <input type="text" id="sql-database" placeholder="Database Name">
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="sql-auth">Authentication</label>
+            <select id="sql-auth">
+              <option value="">Authentication</option>
+              <option value="sql_login">SQL Login</option>
+              <option value="windows">Windows Authentication</option>
+              <option value="azure_ad">Azure AD</option>
+            </select>
+          </div>
+          <div class="validate-btn-wrap">
+            <button type="button" id="sql-validate" class="btn">Test Connection</button>
+          </div>
+          <span id="sql-validate-msg" class="error"></span>
+          <div id="sql-after-validate" style="display:none; margin-top:1rem;">
+            <label><input type="radio" name="sql-mode" value="tables" checked> Export multiple tables</label>
+            <label><input type="radio" name="sql-mode" value="query"> Export by query</label>
+            <div id="sql-tables-box" style="margin-top:0.5rem;">
+              <label>Select tables</label>
+              <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
+              <button type="button" id="sql-export-tables" class="btn" style="margin-top:0.5rem;">Export top 10 rows</button>
+            </div>
+            <div id="sql-query-box" style="margin-top:0.5rem; display:none;">
+              <label>Query</label>
+              <textarea id="sql-query" placeholder="SELECT * FROM ..."></textarea>
+              <button type="button" id="sql-export-query" class="btn">Run and export top 10 rows</button>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="field-group">
-        <label for="local-delimiter">Delimiter</label>
-        <input type="text" id="local-delimiter" name="local_delimiter" value="{{ flow_config.delimiter if flow_config.source_type == 'local' else ',' }}" maxlength="2">
-      </div>
-      <div class="field-group">
-        <label for="local-end-of-record">End of record</label>
-        <select id="local-end-of-record" name="local_end_of_record">
-          <option value="crlf" {{ 'selected' if flow_config.get('end_of_record') == '\r\n' else '' }}>Windows (CRLF)</option>
-          <option value="lf" {{ 'selected' if flow_config.get('end_of_record', '\n') != '\r\n' else '' }}>Linux (LF)</option>
-        </select>
-      </div>
-    </div>
-    <p class="step-hint">Click &quot;Next&quot; to upload and continue. File type and CSV options are detected automatically; you can adjust them before continuing.</p>
-  </div>
 
-  <div class="flow-form-actions">
-    <button type="submit" id="step1-next" class="btn" disabled>Next</button>
-    <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
+      <div id="panel-blob" class="source-panel {% if flow_config.source_type == 'blob' %}active{% endif %}">
+        <div class="connection-parameters">
+          <h3 class="connection-parameters-title">Connection parameters</h3>
+          <div class="field-row">
+            <div class="field-group">
+              <label for="blob-account">Account name</label>
+              <input type="text" id="blob-account" placeholder="Storage account name">
+            </div>
+            <div class="field-group">
+              <label for="blob-container">Container name</label>
+              <input type="text" id="blob-container" placeholder="Container name">
+            </div>
+            <div class="field-group">
+              <label for="blob-key">Account key</label>
+              <input type="password" id="blob-key" placeholder="Account key">
+            </div>
+            <div class="validate-btn-wrap">
+              <button type="button" id="blob-validate" class="btn">Test Connection</button>
+            </div>
+          </div>
+          <span id="blob-validate-msg" class="error"></span>
+          <div id="blob-after-validate" style="display:none; margin-top:1rem;">
+            <label>File type</label>
+            <select id="blob-file-type"><option value="csv">CSV</option></select>
+            <label>Prefix (optional)</label>
+            <input type="text" id="blob-prefix" placeholder="e.g. data/">
+            <label>Delimiter</label>
+            <input type="text" id="blob-delimiter" value="," maxlength="2">
+            <label>Select files</label>
+            <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
+            <button type="button" id="blob-prepare" class="btn" style="margin-top:0.5rem;">Prepare dry run (top 10 rows per file)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-form-actions step1-actions">
+        <button type="button" class="btn btn-secondary" disabled aria-hidden="true">Previous</button>
+        <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary flow-nav-to-domains">← to domains</a>
+        <button type="submit" id="step1-next" class="btn btn-primary" disabled>Next: Dry Run</button>
+      </div>
+    </form>
   </div>
-</form>
+  <aside class="step1-skip">
+    <h3 class="skip-section-title">Or, Skip to Next Page</h3>
+    <p class="skip-section-text">Skip this step to quickly use a local file (e.g., CSV, Excel) for a dry run on the next page. A &quot;Draft&quot; data flow will be created based on your uploaded file.</p>
+    <form method="post" action="{{ form_action }}" class="skip-form">
+      <input type="hidden" name="step" value="1">
+      <input type="hidden" name="skip_source" value="1">
+      <button type="submit" class="btn btn-primary">Skip to Next Page</button>
+    </form>
+  </aside>
+</div>
 </div>
 {% endif %}
 {% if step == 2 %}
 <div class="step-content step-content-active">
 <form method="post" action="{{ form_action }}">
   <input type="hidden" name="step" value="2">
+  {% if flow_config.source_type == 'local' and flow_config.get('skip_source_config') and not temp_dir %}
+  <div id="dry-run-container" class="dry-run-local-placeholder">
+    <p class="step-hint">Upload your file here to run a dry run. (Upload will be implemented in a follow-up.)</p>
+  </div>
+  <div class="dry-run-section" style="display:none;"></div>
+  {% else %}
   <div class="dry-run-section">
     <button type="button" id="dry-run-trigger-btn" class="btn">Dry Run</button>
     <p class="dry-run-hint">Click Dry Run to regenerate synthetic data with animation.</p>
@@ -192,9 +198,11 @@
     <p class="step-hint">Delphix integration is only available for CSV sources. This flow uses {{ flow_config.file_type }}.</p>
   </div>
   {% endif %}
+  {% endif %}
   <div class="flow-form-actions">
-    <button type="submit" class="btn">Next</button>
     <a href="{{ form_action }}" class="btn btn-secondary">Back</a>
+    <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary flow-nav-to-domains">← to domains</a>
+    <button type="submit" class="btn btn-primary">Next</button>
   </div>
 </form>
 </div>
@@ -203,9 +211,11 @@
 <script>
   (function() {
     var tempDir = {{ temp_dir|tojson }};
+    var skipLocalNoData = {{ 'true' if (flow_config.source_type == 'local' and flow_config.get('skip_source_config') and not temp_dir) else 'false' }};
     var container = document.getElementById('dry-run-container');
     var triggerBtn = document.getElementById('dry-run-trigger-btn');
     if (!container) return;
+    if (skipLocalNoData) return;
     if (!tempDir) {
       var section = document.querySelector('.dry-run-section');
       if (section) section.innerHTML = '';
@@ -510,7 +520,7 @@
       <dd>{{ flow_config.delimiter or ',' }}</dd>
       {% elif flow_config.source_type == 'local' %}
       <dt>File</dt>
-      <dd>{{ flow_config.upload_name or 'Uploaded file' }}</dd>
+      <dd>{% if flow_config.get('skip_source_config') %}To be uploaded on next page{% else %}{{ flow_config.upload_name or 'Uploaded file' }}{% endif %}</dd>
       <dt>File type</dt>
       <dd>{{ flow_config.get('file_type') or 'csv' }}</dd>
       {% if flow_config.get('file_type') == 'csv' %}
@@ -539,76 +549,40 @@
 {% if step == 1 %}
 <script>
 (function() {
-  var domainId = {{ domain.id }};
   var step1Config = {};
   var step1TempDir = '';
 
-  function isLocalPanelActive() {
-    return document.getElementById('panel-local').classList.contains('active');
-  }
-  var localHasPreviousUpload = {{ 'true' if (flow_config.source_type == 'local' and flow_config.upload_name and temp_dir) else 'false' }};
   function enableNext() {
     var nextBtn = document.getElementById('step1-next');
-    if (isLocalPanelActive()) {
-      var fileInput = document.getElementById('local-file');
-      var hasFile = fileInput.files && fileInput.files.length > 0;
-      nextBtn.disabled = !(hasFile || localHasPreviousUpload);
-      document.getElementById('step1-config').value = '';
-      document.getElementById('step1-temp-dir').value = '';
-    } else {
-      nextBtn.disabled = !(step1Config.source_type && step1TempDir);
-      document.getElementById('step1-config').value = JSON.stringify(step1Config);
-      document.getElementById('step1-temp-dir').value = step1TempDir;
-    }
+    if (!nextBtn) return;
+    nextBtn.disabled = !(step1Config.source_type && step1TempDir);
+    document.getElementById('step1-config').value = JSON.stringify(step1Config);
+    document.getElementById('step1-temp-dir').value = step1TempDir;
   }
 
-  document.querySelectorAll('.source-tab').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.source-tab').forEach(function(b) { b.classList.remove('active'); });
-      document.querySelectorAll('.source-panel').forEach(function(p) { p.classList.remove('active'); });
-      btn.classList.add('active');
-      var src = btn.getAttribute('data-source');
-      document.getElementById('panel-' + src).classList.add('active');
-      enableNext();
+  function setActiveSource(src) {
+    document.querySelectorAll('.source-option-card').forEach(function(card) { card.classList.remove('active'); });
+    document.querySelectorAll('.source-panel').forEach(function(p) { p.classList.remove('active'); });
+    var card = document.querySelector('.source-option-card[data-source="' + src + '"]');
+    var panel = document.getElementById('panel-' + src);
+    if (card) card.classList.add('active');
+    if (panel) panel.classList.add('active');
+    enableNext();
+  }
+
+  document.querySelectorAll('.source-option-card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      var src = card.getAttribute('data-source');
+      var radio = card.querySelector('input[name="source_type"]');
+      if (radio) radio.checked = true;
+      setActiveSource(src);
     });
   });
-  function toggleLocalCsvOptions() {
-    var sel = document.getElementById('local-file-type');
-    var opts = document.getElementById('local-csv-options');
-    if (sel && opts) opts.style.display = (sel.value === 'csv') ? '' : 'none';
-  }
-  function applyDetected(detected) {
-    if (!detected) return;
-    var typeSel = document.getElementById('local-file-type');
-    var delimInput = document.getElementById('local-delimiter');
-    var headerCb = document.getElementById('local-has-header');
-    var eolSel = document.getElementById('local-end-of-record');
-    if (typeSel && detected.file_type) {
-      typeSel.value = detected.file_type;
-      toggleLocalCsvOptions();
-    }
-    if (delimInput && detected.delimiter !== undefined) delimInput.value = detected.delimiter;
-    if (headerCb) headerCb.checked = detected.has_header !== false;
-    if (eolSel && detected.end_of_record !== undefined) {
-      eolSel.value = (detected.end_of_record === '\r\n') ? 'crlf' : 'lf';
-    }
-  }
-  document.getElementById('local-file').addEventListener('change', function() {
-    enableNext();
-    var fileInput = document.getElementById('local-file');
-    if (!fileInput.files || !fileInput.files.length) return;
-    var fd = new FormData();
-    fd.append('file', fileInput.files[0]);
-    fetch('/api/local/detect', { method: 'POST', body: fd })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.ok) applyDetected(data);
-      })
-      .catch(function() {});
+  document.querySelectorAll('input[name="source_type"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      setActiveSource(this.value);
+    });
   });
-  document.getElementById('local-file-type').addEventListener('change', toggleLocalCsvOptions);
-  toggleLocalCsvOptions();
-  enableNext();
 
   document.querySelectorAll('input[name="sql-mode"]').forEach(function(r) {
     r.addEventListener('change', function() {
@@ -759,6 +733,7 @@
     });
   });
 
+  enableNext();
 })();
 </script>
 {% endif %}

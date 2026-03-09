@@ -65,10 +65,15 @@ body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f
 .domains-empty a { color: #1a73e8; text-decoration: none; }
 .domains-empty a:hover { text-decoration: underline; }
 
-.flow-page { max-width: 720px; }
+.flow-page { max-width: 960px; }
 .flow-page h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
 .flow-page .domain-badge { color: #6c757d; font-size: 0.95rem; margin-bottom: 1.25rem; }
 .flow-page .domain-badge strong { color: #212529; }
+
+.flow-breadcrumbs { font-size: 0.9rem; color: #5f6368; margin-bottom: 0.75rem; }
+.flow-breadcrumbs a { color: #1a73e8; text-decoration: none; }
+.flow-breadcrumbs a:hover { text-decoration: underline; }
+.flow-breadcrumbs-sep { margin: 0 0.35rem; color: #9aa0a6; }
 
 h1 { margin-top: 0; }
 .card { background: #fff; border-radius: 8px; padding: 1rem 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -125,17 +130,37 @@ form textarea { min-height: 100px; }
 .flow-step-wrapper { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }
 .flow-step-wrapper .step-content { border: none; border-radius: 0; box-shadow: none; margin: 0; }
 
-/* Data source selection: card-style buttons with icons */
-.source-section-label { font-size: 0.9rem; font-weight: 600; color: #374151; margin-bottom: 0.75rem; display: block; }
-.source-tabs { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.source-tab { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border: 1px solid #d1d5db; background: #f9fafb; cursor: pointer; border-radius: 6px; font-size: 0.95rem; color: #4b5563; transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.source-tab:hover { background: #f3f4f6; border-color: #9ca3af; }
-.source-tab.active { background: #1a365d; color: #fff; border-color: #1a365d; }
-.source-tab .source-tab-icon { width: 22px; height: 22px; flex-shrink: 0; }
+/* Step 1: two-column layout */
+.step1-layout { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+.step1-main { flex: 1; min-width: 280px; }
+.step1-skip { width: 280px; flex-shrink: 0; background: #f1f3f4; border-radius: 8px; padding: 1.25rem; border: 1px solid #e8eaed; }
+.step1-skip .skip-section-title { margin: 0 0 0.75rem; font-size: 1.05rem; font-weight: 600; color: #202124; }
+.step1-skip .skip-section-text { margin: 0 0 1rem; font-size: 0.9rem; color: #5f6368; line-height: 1.5; }
+.step1-skip .skip-form { margin: 0; }
+.step1-skip .skip-form .btn { width: 100%; }
+
+.defined-sources-title { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 700; color: #202124; }
+.defined-sources-subtitle { margin: 0 0 1rem; font-size: 0.95rem; color: #5f6368; }
+.source-options { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.source-option-card { display: inline-flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; border: 2px solid #d1d5db; background: #fff; cursor: pointer; border-radius: 8px; font-size: 0.95rem; color: #4b5563; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.source-option-card:hover { background: #f8f9fa; border-color: #9ca3af; }
+.source-option-card.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+.source-option-radio { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+.source-option-icon { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.source-option-icon svg { width: 28px; height: 28px; }
+.source-option-icon-sql { color: #5b9bd5; }
+.source-option-card.active .source-option-icon-sql { color: #1a73e8; }
+.source-option-icon-blob { color: #1a73e8; }
+.source-option-label { font-weight: 500; }
+
+.connection-parameters { background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+.connection-parameters-title { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; color: #374151; }
+.connection-parameters .field-row { margin-bottom: 1rem; }
+.connection-parameters .field-group { margin-bottom: 0.75rem; }
+.connection-parameters .validate-btn-wrap { margin-top: 0.5rem; }
+
 .source-panel { display: none; }
 .source-panel.active { display: block; }
-
-/* SQL panel: row layout for server/database + validate button */
 .source-panel .field-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
 .source-panel .field-group { flex: 1; min-width: 200px; }
 .source-panel .field-group label { display: block; font-size: 0.9rem; font-weight: 500; color: #374151; margin-bottom: 0.35rem; }
@@ -147,7 +172,9 @@ form textarea { min-height: 100px; }
 .source-panel .field-group-checkbox .checkbox-wrap { display: flex; align-items: center; min-height: 2.25rem; }
 .source-panel .field-group-checkbox .checkbox-wrap input { margin-right: 0.35rem; }
 .source-panel .validate-btn-wrap { flex-shrink: 0; }
-.flow-form-actions { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; }
+.flow-form-actions { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+.step1-actions .flow-nav-to-domains { margin-left: auto; }
+.dry-run-local-placeholder { padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6; }
 
 .dry-run-section { margin-bottom: 1rem; }
 .dry-run-section .btn { margin-right: 0.5rem; }

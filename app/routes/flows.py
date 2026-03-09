@@ -108,6 +108,14 @@ def new(domain_id):
     if request.method == "POST":
         step = request.form.get("step", type=int, default=1)
         if step == 1:
+            # Skip to next page (local file — upload will be on step 2 later)
+            if request.form.get("skip_source") == "1":
+                session[SESSION_FLOW_CONFIG] = {
+                    "source_type": "local",
+                    "skip_source_config": True,
+                }
+                session[SESSION_TEMP_DIR] = ""
+                return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
             # Local file: upload on submit (no config/temp_dir in form)
             if _handle_step1_local_upload(domain_id):
                 cfg = session.get(SESSION_FLOW_CONFIG) or {}
@@ -184,6 +192,13 @@ def edit(domain_id, flow_id):
     if request.method == "POST":
         step = request.form.get("step", type=int, default=1)
         if step == 1:
+            if request.form.get("skip_source") == "1":
+                session[SESSION_FLOW_CONFIG] = {
+                    "source_type": "local",
+                    "skip_source_config": True,
+                }
+                session[SESSION_TEMP_DIR] = ""
+                return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)
             if _handle_step1_local_upload(domain_id):
                 cfg = session.get(SESSION_FLOW_CONFIG) or {}
                 temp_dir = session.get(SESSION_TEMP_DIR) or ""
