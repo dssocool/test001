@@ -192,14 +192,6 @@
   <div id="dry-run-container"></div>
   {% if flow_config.get('delphix') %}
   <script type="application/json" id="delphix-config">{{ flow_config.delphix|tojson }}</script>
-  <div class="delphix-results-section" style="margin-top:1.5rem;">
-    <h3>Delphix results</h3>
-    <div id="delphix-results-container"><p>Loading…</p></div>
-  </div>
-  {% elif flow_config.source_type == 'local' and flow_config.get('file_type') and flow_config.get('file_type') != 'csv' %}
-  <div class="delphix-results-section" style="margin-top:1.5rem;">
-    <p class="step-hint">Delphix integration is only available for CSV sources. This flow uses {{ flow_config.file_type }}.</p>
-  </div>
   {% endif %}
   {% endif %}
   <div class="flow-form-actions">
@@ -492,47 +484,6 @@
       document.getElementById('rule-setup-modal-overlay').style.display = 'none';
       currentRuleFileIndex = null;
     }
-  })();
-</script>
-<script>
-  (function() {
-    var configEl = document.getElementById('delphix-config');
-    var containerEl = document.getElementById('delphix-results-container');
-    if (!configEl || !containerEl) return;
-    var delphixConfig;
-    try {
-      delphixConfig = JSON.parse(configEl.textContent);
-    } catch (e) {
-      containerEl.innerHTML = '<p class="error">Invalid Delphix config.</p>';
-      return;
-    }
-    fetch('/api/delphix/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        profile_execution_id: delphixConfig.profile_execution_id || null,
-        masking_execution_id: delphixConfig.masking_execution_id || null
-      })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      if (!data.ok) {
-        containerEl.innerHTML = '<p class="error">' + (data.error || 'Failed to load status') + '</p>';
-        return;
-      }
-      function fmtExec(exec) {
-        if (!exec) return '<p>No execution data.</p>';
-        if (exec.error) return '<p class="error">' + exec.error + '</p>';
-        var parts = ['<p><strong>Status:</strong> ' + (exec.status || '—') + '</p>'];
-        if (exec.rowsMasked != null) parts.push('<p>Rows masked: ' + exec.rowsMasked + '</p>');
-        if (exec.rowsTotal != null) parts.push('<p>Rows total: ' + exec.rowsTotal + '</p>');
-        if (exec.startTime) parts.push('<p>Start: ' + exec.startTime + '</p>');
-        if (exec.endTime) parts.push('<p>End: ' + exec.endTime + '</p>');
-        return '<div class="delphix-job-result">' + parts.join('') + '</div>';
-      }
-      var html = '<div class="delphix-results"><h4>Profile job</h4>' + fmtExec(data.profile) + '<h4>Masking job</h4>' + fmtExec(data.masking) + '</div>';
-      containerEl.innerHTML = html;
-    }).catch(function(err) {
-      containerEl.innerHTML = '<p class="error">Error: ' + (err.message || 'Request failed') + '</p>';
-    });
   })();
 </script>
 {% endif %}
