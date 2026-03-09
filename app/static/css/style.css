@@ -12,7 +12,7 @@ body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f
 .sidebar-nav-item.active { background: #d2e3fc; color: #1a73e8; }
 .sidebar-nav-icon { width: 20px; height: 20px; flex-shrink: 0; }
 .main { flex: 1; min-width: 0; padding: 1.5rem 2rem; background: #fff; }
-.main .flow-page { max-width: 720px; }
+.main .flow-page { max-width: none; }
 
 /* Domains page: header */
 .domains-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
@@ -65,7 +65,7 @@ body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f
 .domains-empty a { color: #1a73e8; text-decoration: none; }
 .domains-empty a:hover { text-decoration: underline; }
 
-.flow-page { max-width: 960px; }
+.flow-page { max-width: 100%; width: 100%; padding: 0 0.5rem; }
 .flow-page h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
 .flow-page .domain-badge { color: #6c757d; font-size: 0.95rem; margin-bottom: 1.25rem; }
 .flow-page .domain-badge strong { color: #212529; }
@@ -130,26 +130,33 @@ form textarea { min-height: 100px; }
 .flow-step-wrapper { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }
 .flow-step-wrapper .step-content { border: none; border-radius: 0; box-shadow: none; margin: 0; }
 
-/* Step 1: two-column layout */
-.step1-layout { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
-.step1-main { flex: 1; min-width: 280px; }
-.step1-skip { width: 280px; flex-shrink: 0; background: #f1f3f4; border-radius: 8px; padding: 1.25rem; border: 1px solid #e8eaed; }
-.step1-skip .skip-section-title { margin: 0 0 0.75rem; font-size: 1.05rem; font-weight: 600; color: #202124; }
-.step1-skip .skip-section-text { margin: 0 0 1rem; font-size: 0.9rem; color: #5f6368; line-height: 1.5; }
-.step1-skip .skip-form { margin: 0; }
-.step1-skip .skip-form .btn { width: 100%; }
+/* Step 1: constrain to viewport height so no page-level scroll */
+.flow-step-wrapper .step-content.step-content-active.step1-content { display: flex; flex-direction: column; overflow: hidden; max-height: calc(100vh - 12rem); }
+.flow-step-wrapper .step1-content .step1-layout { flex: 1; min-height: 0; overflow: hidden; }
+
+/* Step 1: two cards, flexible layout, occupy most of page */
+.step1-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: stretch; min-height: min(60vh, 420px); }
+@media (max-width: 768px) { .step1-layout { grid-template-columns: 1fr; min-height: min(50vh, 360px); } }
+.step1-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-width: 0; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+.step1-card:hover { border-color: #cbd5e1; }
+.step1-card-selected { border-color: #1a73e8; box-shadow: 0 0 0 1px #1a73e8; }
+.step1-card-a { flex: 1; min-height: 0; max-height: none; }
+.step1-card-title { margin: 0 0 1rem; font-size: 1.1rem; font-weight: 600; color: #202124; flex-shrink: 0; }
+.step1-card-a form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.step1-card-scroll { flex: 1; min-height: 0; overflow-y: auto; margin-bottom: 1rem; -webkit-overflow-scrolling: touch; }
+.step1-card-b .step1-card-desc { margin: 0; font-size: 0.9rem; color: #5f6368; line-height: 1.5; }
 
 .defined-sources-title { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 700; color: #202124; }
-.defined-sources-subtitle { margin: 0 0 1rem; font-size: 0.95rem; color: #5f6368; }
-.source-options { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.source-option-card { display: inline-flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; border: 2px solid #d1d5db; background: #fff; cursor: pointer; border-radius: 8px; font-size: 0.95rem; color: #4b5563; transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.source-option-card:hover { background: #f8f9fa; border-color: #9ca3af; }
-.source-option-card.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+.defined-sources-subtitle { margin: 0 0 0.75rem; font-size: 0.95rem; color: #5f6368; }
+.source-tabs-row { display: flex; flex-direction: row; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid #e2e8f0; }
+.source-tab-item { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; background: transparent; cursor: pointer; font-size: 0.95rem; color: #5f6368; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+.source-tab-item:hover { color: #202124; background: #f1f3f4; }
+.source-tab-item.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 500; }
 .source-option-radio { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
-.source-option-icon { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.source-option-icon svg { width: 28px; height: 28px; }
+.source-option-icon { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.source-tab-item .source-option-icon svg { width: 22px; height: 22px; }
 .source-option-icon-sql { color: #5b9bd5; }
-.source-option-card.active .source-option-icon-sql { color: #1a73e8; }
+.source-tab-item.active .source-option-icon-sql { color: #1a73e8; }
 .source-option-icon-blob { color: #1a73e8; }
 .source-option-label { font-weight: 500; }
 
@@ -172,8 +179,8 @@ form textarea { min-height: 100px; }
 .source-panel .field-group-checkbox .checkbox-wrap { display: flex; align-items: center; min-height: 2.25rem; }
 .source-panel .field-group-checkbox .checkbox-wrap input { margin-right: 0.35rem; }
 .source-panel .validate-btn-wrap { flex-shrink: 0; }
-.flow-form-actions { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
-.step1-actions .flow-nav-to-domains { margin-left: auto; }
+.flow-form-actions { margin-top: 0; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
+.step1-actions { margin-top: auto; }
 .dry-run-local-placeholder { padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6; }
 
 .dry-run-section { margin-bottom: 1rem; }
