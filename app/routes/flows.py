@@ -196,6 +196,27 @@ def run_dry_run(domain_id):
         temp_dir = result
         session[SESSION_TEMP_DIR] = temp_dir
 
+    # Blob with no temp_dir yet: fetch from blob with max_rows per file, then run Delphix
+    if cfg.get("source_type") == "blob" and not temp_dir:
+        account_name = cfg.get("account_name", "").strip()
+        container = cfg.get("container", "").strip()
+        key = (cfg.get("key") or "").strip()
+        selected_blobs = cfg.get("selected_blobs") or []
+        delimiter = cfg.get("delimiter", ",") or ","
+        if not account_name or not container or not key:
+            return jsonify({"ok": False, "error": "Blob account, container and key required"}), 400
+        if not selected_blobs:
+            return jsonify({"ok": False, "error": "Select at least one file"}), 400
+        from app.services.blob_source import fetch_blob_dry_run
+        temp_base = current_app.config["TEMP_BASE"]
+        ok, result = fetch_blob_dry_run(
+            account_name, container, key, selected_blobs, delimiter, max_rows, temp_base
+        )
+        if not ok:
+            return jsonify({"ok": False, "error": result}), 400
+        temp_dir = result
+        session[SESSION_TEMP_DIR] = temp_dir
+
     if not temp_dir:
         return jsonify({"ok": False, "error": "No temp data. Complete step 1 first."}), 400
 
@@ -205,7 +226,7 @@ def run_dry_run(domain_id):
     cfg["delphix"] = result
     session[SESSION_FLOW_CONFIG] = cfg
     response = {"ok": True, "delphix": result}
-    if cfg.get("source_type") == "sql":
+    if cfg.get("source_type") in ("sql", "blob"):
         response["temp_dir"] = temp_dir
     return jsonify(response)
 
@@ -241,8 +262,8 @@ def new(domain_id):
                 try:
                     cfg = json.loads(config_json)
                     session[SESSION_FLOW_CONFIG] = cfg
-                    if cfg.get("source_type") == "sql":
-                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty for SQL
+                    if cfg.get("source_type") in ("sql", "blob"):
+                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty; fetched on step 2
                     elif temp_dir:
                         session[SESSION_TEMP_DIR] = temp_dir
                 except json.JSONDecodeError:
@@ -311,8 +332,8 @@ def edit(domain_id, flow_id):
                 try:
                     cfg = json.loads(config_json)
                     session[SESSION_FLOW_CONFIG] = cfg
-                    if cfg.get("source_type") == "sql":
-                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty for SQL
+                    if cfg.get("source_type") in ("sql", "blob"):
+                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty; fetched on step 2
                     elif temp_dir:
                         session[SESSION_TEMP_DIR] = temp_dir
                 except json.JSONDecodeError:

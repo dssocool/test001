@@ -1,8 +1,9 @@
 """
-Azure Blob Storage: validate, list blobs, download and trim to 10 rows per file.
+Azure Blob Storage: validate, list blobs, download and trim to N rows per file.
 """
 import csv
 import os
+import uuid
 from io import StringIO
 
 
@@ -26,8 +27,16 @@ def validate_and_list(account_name, container, key, prefix=""):
 
 
 def download_top10_rows(account_name, container, key, blob_names, delimiter, temp_dir):
+    return download_top_n_rows(account_name, container, key, blob_names, delimiter, temp_dir, 10)
+
+
+def download_top_n_rows(account_name, container, key, blob_names, delimiter, temp_dir, n):
+    """Download each blob and write up to n+1 rows (header + n data rows) per file to temp_dir. Returns (True, files) or (False, error)."""
     if not blob_names:
         return False, "No blobs selected"
+    if n is None or n < 1:
+        n = 1
+    max_rows_to_read = n + 1  # header + n data rows
     try:
         client = _blob_client(account_name, key)
         container_client = client.get_container_client(container)
@@ -42,7 +51,7 @@ def download_top10_rows(account_name, container, key, blob_names, delimiter, tem
             reader = csv.reader(StringIO(text), delimiter=delimiter)
             rows = []
             for i, row in enumerate(reader):
-                if i >= 11:
+                if i >= max_rows_to_read:
                     break
                 rows.append(row)
             safe_name = os.path.basename(blob_name) or blob_name.replace("/", "_")
@@ -57,3 +66,21 @@ def download_top10_rows(account_name, container, key, blob_names, delimiter, tem
         return True, files
     except Exception as e:
         return False, str(e)
+
+
+def fetch_blob_dry_run(account_name, container, key, selected_blobs, delimiter, max_rows, temp_base):
+    """
+    Create a temp dir, download top max_rows rows per selected blob, write CSVs.
+    Returns (True, temp_dir) or (False, error_message).
+    """
+    if not selected_blobs:
+        return False, "No files selected"
+    os.makedirs(temp_base, exist_ok=True)
+    subdir = os.path.join(temp_base, str(uuid.uuid4()))
+    os.makedirs(subdir, exist_ok=True)
+    ok, result = download_top_n_rows(
+        account_name, container, key, selected_blobs, delimiter or ",", subdir, max_rows
+    )
+    if not ok:
+        return False, result
+    return True, subdir

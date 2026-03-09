@@ -146,7 +146,6 @@
               <input type="text" id="blob-delimiter" value="," maxlength="2">
               <label>Select files</label>
               <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
-              <button type="button" id="blob-prepare" class="btn" style="margin-top:0.5rem;">Prepare dry run (top 10 rows per file)</button>
             </div>
           </div>
         </div>
@@ -216,7 +215,7 @@
     var triggerBtn = document.getElementById('dry-run-trigger-btn');
     if (!container) return;
     if (skipLocalNoData) return;
-    if (!tempDir && sourceType !== 'sql') {
+    if (!tempDir && sourceType !== 'sql' && sourceType !== 'blob') {
       var section = document.querySelector('.dry-run-section');
       if (section) section.innerHTML = '';
       container.innerHTML = '<p class="error">No temp data. Go back and complete step 1.</p>';
@@ -427,6 +426,33 @@
           });
         return;
       }
+      if (sourceType === 'blob' && !tempDir) {
+        if (triggerBtn) triggerBtn.disabled = true;
+        container.innerHTML = '<p>Running synthetic data generation…</p>';
+        fetch(runDryRunUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_rows: maxRows })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok && data.delphix) {
+              if (data.temp_dir) tempDir = data.temp_dir;
+              blobNames = data.delphix.blob_names || [];
+              fileFormatIds = data.delphix.file_format_ids || [];
+              hasRunDelphix = true;
+              loadData(maxRows);
+            } else {
+              if (triggerBtn) triggerBtn.disabled = false;
+              container.innerHTML = '<p class="error">' + escapeHtml(data.error || 'Dry run failed') + '</p>';
+            }
+          })
+          .catch(function(err) {
+            if (triggerBtn) triggerBtn.disabled = false;
+            container.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+          });
+        return;
+      }
       if (!tempDir) return;
       if (hasRunDelphix) {
         loadData(maxRows);
@@ -596,9 +622,31 @@
         return step1Config.query && String(step1Config.query).trim() !== '';
       return false;
     }
-    if (step1Config.source_type === 'blob')
-      return !!step1TempDir;
+    if (step1Config.source_type === 'blob') {
+      if (!step1Config.account_name || !step1Config.container) return false;
+      return step1Config.selected_blobs && step1Config.selected_blobs.length > 0;
+    }
     return false;
+  }
+
+  function updateBlobConfig() {
+    var account = document.getElementById('blob-account');
+    var container = document.getElementById('blob-container');
+    var key = document.getElementById('blob-key');
+    var prefix = document.getElementById('blob-prefix');
+    var fileType = document.getElementById('blob-file-type');
+    var delimiter = document.getElementById('blob-delimiter');
+    var listEl = document.getElementById('blob-list');
+    if (!account || !container) return;
+    step1Config.source_type = 'blob';
+    step1Config.account_name = account.value.trim();
+    step1Config.container = container.value.trim();
+    step1Config.key = (key && key.value) ? key.value.trim() : '';
+    step1Config.prefix = (prefix && prefix.value) ? prefix.value.trim() : '';
+    step1Config.file_type = (fileType && fileType.value) ? fileType.value : 'csv';
+    step1Config.delimiter = (delimiter && delimiter.value) ? delimiter.value : ',';
+    step1Config.selected_blobs = listEl ? [].map.call(listEl.selectedOptions, function(o) { return o.value; }) : [];
+    enableNext();
   }
 
   function updateSqlConfig() {
@@ -701,6 +749,15 @@
         var banner = document.getElementById('step1-warning-banner');
         if (banner) {
           banner.textContent = 'Select at least one table or provide a query';
+          banner.removeAttribute('hidden');
+        }
+        return false;
+      }
+      if (step1Config.source_type === 'blob' && (!step1Config.selected_blobs || step1Config.selected_blobs.length === 0)) {
+        e.preventDefault();
+        var banner = document.getElementById('step1-warning-banner');
+        if (banner) {
+          banner.textContent = 'Select at least one file';
           banner.removeAttribute('hidden');
         }
         return false;
@@ -859,6 +916,7 @@
           opt.textContent = b;
           sel.appendChild(opt);
         });
+        updateBlobConfig();
       } else {
         msg.textContent = data.error || 'Connection failed';
         msg.className = 'error';
@@ -869,32 +927,8 @@
     });
   });
 
-  document.getElementById('blob-prepare').addEventListener('click', function() {
-    var account = document.getElementById('blob-account').value.trim();
-    var container = document.getElementById('blob-container').value.trim();
-    var key = document.getElementById('blob-key').value.trim();
-    var prefix = document.getElementById('blob-prefix').value.trim();
-    var fileType = document.getElementById('blob-file-type').value;
-    var delimiter = document.getElementById('blob-delimiter').value || ',';
-    var sel = document.getElementById('blob-list');
-    var selected = [].map.call(sel.selectedOptions, function(o) { return o.value; });
-    if (!selected.length) return;
-    fetch('/api/blob/prepare-dry-run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        account_name: account, container: container, key: key,
-        prefix: prefix, file_type: fileType, delimiter: delimiter,
-        selected_blobs: selected
-      })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.ok) {
-        step1Config = { source_type: 'blob', account_name: account, container: container, prefix: prefix, file_type: fileType, delimiter: delimiter, selected_blobs: selected };
-        step1TempDir = data.temp_dir;
-        enableNext();
-      }
-    });
-  });
+  var blobListEl = document.getElementById('blob-list');
+  if (blobListEl) blobListEl.addEventListener('change', updateBlobConfig);
 
   enableNext();
   updateWarningBanner();
