@@ -139,12 +139,18 @@ form textarea { min-height: 100px; }
 @media (max-width: 768px) { .step1-layout { grid-template-columns: 1fr; min-height: min(50vh, 360px); } }
 .step1-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-width: 0; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
 .step1-card:hover { border-color: #cbd5e1; }
-.step1-card-selected { border-color: #1a73e8; box-shadow: 0 0 0 1px #1a73e8; }
+.step1-card-selected { border: 3px solid #1a73e8; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.step1-card-selected:hover { border-color: #1a73e8; }
 .step1-card-a { flex: 1; min-height: 0; max-height: none; }
 .step1-card-title { margin: 0 0 1rem; font-size: 1.1rem; font-weight: 600; color: #202124; flex-shrink: 0; }
 .step1-card-a form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .step1-card-scroll { flex: 1; min-height: 0; overflow-y: auto; margin-bottom: 1rem; -webkit-overflow-scrolling: touch; }
-.step1-card-b .step1-card-desc { margin: 0; font-size: 0.9rem; color: #5f6368; line-height: 1.5; }
+.step1-card-b .step1-card-desc { margin: 0 0 1rem; font-size: 0.9rem; color: #5f6368; line-height: 1.5; }
+.step1-warning-banner { margin: 0 0 1rem; padding: 0.75rem 1rem; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; color: #92400e; font-size: 0.95rem; }
+.step1-local-file-input { position: absolute; width: 0; height: 0; opacity: 0; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.step1-upload-btn { width: 100%; margin-bottom: 0.5rem; }
+.step1-uploaded-filename { margin: 0; font-size: 0.9rem; color: #137333; }
+.step1-uploaded-filename.error { color: #d93025; }
 
 .defined-sources-title { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 700; color: #202124; }
 .defined-sources-subtitle { margin: 0 0 0.75rem; font-size: 0.95rem; color: #5f6368; }

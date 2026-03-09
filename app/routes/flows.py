@@ -1,7 +1,7 @@
 import json
 import os
 import uuid
-from flask import Blueprint, render_template, request, redirect, url_for, current_app, session
+from flask import Blueprint, render_template, request, redirect, url_for, current_app, session, jsonify
 
 from app.models import get_domain, get_flow, get_flow_count, create_flow, update_flow, delete_flow
 from app.services.delphix_flow import run_delphix_flow
@@ -97,6 +97,18 @@ def _handle_step1_local_upload(domain_id):
     }
     session[SESSION_TEMP_DIR] = subdir
     return True
+
+
+@flows_bp.route("/upload-local", methods=["POST"])
+def upload_local(domain_id):
+    """Upload a local file for Option B; sets session and returns JSON. Does not redirect. Delphix is called on the next page."""
+    domain = get_domain(current_app, domain_id)
+    if not domain:
+        return jsonify({"ok": False, "error": "Domain not found"}), 404
+    if not _handle_step1_local_upload(domain_id):
+        return jsonify({"ok": False, "error": "No file or invalid file"}), 400
+    cfg = session.get(SESSION_FLOW_CONFIG) or {}
+    return jsonify({"ok": True, "filename": cfg.get("upload_name", "")})
 
 
 @flows_bp.route("/new", methods=["GET", "POST"])

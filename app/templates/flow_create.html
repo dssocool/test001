@@ -44,6 +44,9 @@
 
 {% if step == 1 %}
 <div class="step-content step-content-active step1-content">
+<div id="step1-warning-banner" class="step1-warning-banner" role="alert" aria-live="polite" hidden>
+  Please configure a data source or upload a file to continue.
+</div>
 {% if delphix_error %}
   <p class="error">Delphix: {{ delphix_error }}</p>
 {% endif %}
@@ -58,8 +61,8 @@
         <h2 class="defined-sources-title">Defined Data Sources</h2>
         <p class="defined-sources-subtitle">Select Defined Data Source</p>
         <div class="source-tabs-row" role="tablist" aria-label="Data source type">
-          <label class="source-tab-item {% if (flow_config.source_type or 'sql') == 'sql' %}active{% endif %}" data-source="sql" role="tab">
-            <input type="radio" name="source_type" value="sql" {% if (flow_config.source_type or 'sql') == 'sql' %}checked{% endif %} class="source-option-radio">
+          <label class="source-tab-item {% if flow_config.source_type != 'blob' %}active{% endif %}" data-source="sql" role="tab">
+            <input type="radio" name="source_type" value="sql" {% if flow_config.source_type != 'blob' %}checked{% endif %} class="source-option-radio">
             <span class="source-option-icon source-option-icon-sql">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
             </span>
@@ -74,7 +77,7 @@
           </label>
         </div>
 
-        <div id="panel-sql" class="source-panel {% if (flow_config.source_type or 'sql') == 'sql' %}active{% endif %}">
+        <div id="panel-sql" class="source-panel {% if flow_config.source_type != 'blob' %}active{% endif %}">
           <div class="connection-parameters">
             <h3 class="connection-parameters-title">Connection parameters</h3>
             <div class="field-row">
@@ -160,7 +163,10 @@
   </div>
   <div class="step1-card step1-card-b" data-step1-card="b" role="button" tabindex="0" aria-pressed="false" aria-label="Option B: local file">
     <h3 class="step1-card-title">Option B</h3>
-    <p class="step1-card-desc">Skip this step to quickly use a local file (e.g., CSV, Excel) for a dry run on the next page. A &quot;Draft&quot; data flow will be created based on your uploaded file.</p>
+    <p class="step1-card-desc">Upload a local file for ad-hoc or one-time rule configuration. For continuous data flows, use a persistent source such as SQL Server or Azure Blob Storage.</p>
+    <input type="file" id="step1-local-file" name="file" accept=".csv,.txt,.json,.xml,.parquet" class="step1-local-file-input" aria-label="Choose file">
+    <button type="button" id="step1-upload-file-btn" class="btn btn-primary step1-upload-btn">Upload file</button>
+    <p id="step1-uploaded-filename" class="step1-uploaded-filename" {% if not (flow_config.source_type == 'local' and flow_config.get('upload_name')) %}hidden{% endif %}>{% if flow_config.source_type == 'local' and flow_config.get('upload_name') %}Uploaded: {{ flow_config.upload_name }}{% endif %}</p>
   </div>
 </div>
 </div>
@@ -545,13 +551,37 @@
 (function() {
   var step1Config = {};
   var step1TempDir = '';
+  var localFileUploaded = {{ 'true' if (flow_config.source_type == 'local' and flow_config.get('upload_name') and temp_dir) else 'false' }};
+  var uploadLocalUrl = {{ url_for('flows_bp.upload_local', domain_id=domain.id)|tojson }};
+
+  function hasSourceConfigured() {
+    return (step1Config.source_type && step1TempDir) || localFileUploaded;
+  }
+
+  function updateWarningBanner() {
+    var banner = document.getElementById('step1-warning-banner');
+    if (!banner) return;
+    if (hasSourceConfigured()) {
+      banner.setAttribute('hidden', '');
+    } else {
+      banner.removeAttribute('hidden');
+    }
+  }
 
   function enableNext() {
     var nextBtn = document.getElementById('step1-next');
     if (!nextBtn) return;
-    nextBtn.disabled = !(step1Config.source_type && step1TempDir);
-    document.getElementById('step1-config').value = JSON.stringify(step1Config);
-    document.getElementById('step1-temp-dir').value = step1TempDir;
+    nextBtn.disabled = !hasSourceConfigured();
+    var configEl = document.getElementById('step1-config');
+    var tempDirEl = document.getElementById('step1-temp-dir');
+    if (localFileUploaded) {
+      configEl.value = '';
+      tempDirEl.value = '';
+    } else {
+      configEl.value = JSON.stringify(step1Config);
+      tempDirEl.value = step1TempDir;
+    }
+    updateWarningBanner();
   }
 
   function setActiveSource(src) {
@@ -592,6 +622,61 @@
       setActiveSource(this.value);
     });
   });
+
+  (function ensureSqlSelectedOnLoad() {
+    var checked = document.querySelector('input[name="source_type"]:checked');
+    var src = (checked && checked.value) ? checked.value : 'sql';
+    setActiveSource(src);
+  })();
+
+  var uploadFileBtn = document.getElementById('step1-upload-file-btn');
+  var localFileInput = document.getElementById('step1-local-file');
+  var uploadedFilenameEl = document.getElementById('step1-uploaded-filename');
+  if (uploadFileBtn && localFileInput) {
+    uploadFileBtn.addEventListener('click', function() { localFileInput.click(); });
+    localFileInput.addEventListener('change', function() {
+      if (!this.files || !this.files.length) return;
+      var file = this.files[0];
+      var fd = new FormData();
+      fd.append('file', file);
+      uploadFileBtn.disabled = true;
+      fetch(uploadLocalUrl, { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          uploadFileBtn.disabled = false;
+          if (data.ok) {
+            localFileUploaded = true;
+            if (uploadedFilenameEl) {
+              uploadedFilenameEl.textContent = 'Uploaded: ' + (data.filename || file.name);
+              uploadedFilenameEl.removeAttribute('hidden');
+              uploadedFilenameEl.classList.remove('error');
+            }
+            document.querySelectorAll('.step1-card[data-step1-card]').forEach(function(c) {
+              c.classList.remove('step1-card-selected');
+              c.setAttribute('aria-pressed', c.getAttribute('data-step1-card') === 'b' ? 'true' : 'false');
+            });
+            var cardB = document.querySelector('.step1-card[data-step1-card="b"]');
+            if (cardB) cardB.classList.add('step1-card-selected');
+            enableNext();
+          } else {
+            if (uploadedFilenameEl) {
+              uploadedFilenameEl.textContent = data.error || 'Upload failed';
+              uploadedFilenameEl.removeAttribute('hidden');
+              uploadedFilenameEl.classList.add('error');
+            }
+          }
+        })
+        .catch(function(err) {
+          uploadFileBtn.disabled = false;
+          if (uploadedFilenameEl) {
+            uploadedFilenameEl.textContent = err.message || 'Upload failed';
+            uploadedFilenameEl.removeAttribute('hidden');
+            uploadedFilenameEl.classList.add('error');
+          }
+        });
+      localFileInput.value = '';
+    });
+  }
 
   document.querySelectorAll('input[name="sql-mode"]').forEach(function(r) {
     r.addEventListener('change', function() {
@@ -743,6 +828,7 @@
   });
 
   enableNext();
+  updateWarningBanner();
 })();
 </script>
 {% endif %}
