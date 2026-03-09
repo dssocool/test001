@@ -21,6 +21,11 @@ def files():
     temp_dir = request.args.get("temp_dir", "").strip()
     if not temp_dir or not os.path.isdir(temp_dir):
         return jsonify({"ok": False, "error": "Invalid temp_dir"}), 400
+    max_rows = request.args.get("max_rows", type=int, default=10)
+    if max_rows is None or max_rows < 1:
+        max_rows = 1
+    elif max_rows > 10:
+        max_rows = 10
     result = []
     for name in sorted(os.listdir(temp_dir)):
         path = os.path.join(temp_dir, name)
@@ -35,7 +40,7 @@ def files():
             with open(path, "r", encoding="utf-8", errors="replace") as fp:
                 reader = csv.reader(fp)
                 for i, row in enumerate(reader):
-                    if i >= 10:
+                    if i > max_rows:
                         break
                     rows.append(row)
         except Exception as e:
@@ -71,12 +76,17 @@ def masked_file():
         )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+    max_rows = request.args.get("max_rows", type=int, default=MAX_MASKED_ROWS)
+    if max_rows is None or max_rows < 1:
+        max_rows = 1
+    if max_rows > MAX_MASKED_ROWS:
+        max_rows = MAX_MASKED_ROWS
     text = content.decode("utf-8", errors="replace")
     rows = []
     try:
         reader = csv.reader(io.StringIO(text), delimiter=delimiter)
         for i, row in enumerate(reader):
-            if i >= MAX_MASKED_ROWS:
+            if i > max_rows:
                 break
             rows.append(row)
     except Exception as e:

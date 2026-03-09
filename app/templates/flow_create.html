@@ -182,12 +182,14 @@
   <div class="dry-run-section" style="display:none;"></div>
   {% else %}
   <div class="dry-run-section">
-    <button type="button" id="dry-run-trigger-btn" class="btn">Dry Run</button>
-    <p class="dry-run-hint">Click Dry Run to regenerate synthetic data with animation.</p>
+    <div class="dry-run-rows-wrap">
+      <label for="dry-run-rows-slider" class="dry-run-rows-label">Rows for dry run:</label>
+      <input type="range" id="dry-run-rows-slider" min="1" max="10" value="10" aria-valuemin="1" aria-valuemax="10" aria-valuenow="10">
+      <span id="dry-run-rows-value" class="dry-run-rows-value" aria-live="polite">10</span>
+      <button type="button" id="dry-run-trigger-btn" class="btn">Dry Run</button>
+    </div>
   </div>
-  <div id="dry-run-container">
-    <p>Loading data…</p>
-  </div>
+  <div id="dry-run-container"></div>
   {% if flow_config.get('delphix') %}
   <script type="application/json" id="delphix-config">{{ flow_config.delphix|tojson }}</script>
   <div class="delphix-results-section" style="margin-top:1.5rem;">
@@ -224,14 +226,17 @@
     }
     var blobNames = [];
     var fileFormatIds = [];
+    var hasRunDelphix = false;
     var delphixEl = document.getElementById('delphix-config');
     if (delphixEl) {
       try {
         var c = JSON.parse(delphixEl.textContent);
         blobNames = c.blob_names || [];
         fileFormatIds = c.file_format_ids || [];
+        hasRunDelphix = true;
       } catch (e) {}
     }
+    var runDryRunUrl = {{ url_for('flows_bp.run_dry_run', domain_id=domain.id)|tojson }};
     var delimiterParam = {{ (flow_config.get('delimiter') or ',')|tojson }};
     var chevronSvg = '<svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
     function escapeHtml(s) {
@@ -275,9 +280,12 @@
         var maskRow = useMasked && f.maskedRows[i] ? f.maskedRows[i] : null;
         origRow.forEach(function(cell, colIndex) {
           var method = (rules && rules[colIndex]) ? rules[colIndex] : 'synthesize';
-          var display = (maskRow && maskRow[colIndex] !== undefined)
-            ? String(maskRow[colIndex])
-            : applyRulesToCell(cell, method);
+          var display = '';
+          if (hasRunDelphix) {
+            display = (maskRow && maskRow[colIndex] !== undefined)
+              ? String(maskRow[colIndex])
+              : applyRulesToCell(cell, method);
+          }
           html += '<td class="col-original">' + escapeHtml(String(cell)) + '</td>';
           html += '<td class="col-synthetic">' + escapeHtml(display) + '</td>';
         });
@@ -351,7 +359,8 @@
           return;
         }
         var blobName = blobNames[i];
-        var url = '/api/dry-run/masked-file?blob_name=' + encodeURIComponent(blobName) + (delimiterParam ? '&delimiter=' + encodeURIComponent(delimiterParam) : '');
+        var mr = getDryRunRows();
+        var url = '/api/dry-run/masked-file?blob_name=' + encodeURIComponent(blobName) + '&max_rows=' + encodeURIComponent(String(mr)) + (delimiterParam ? '&delimiter=' + encodeURIComponent(delimiterParam) : '');
         fetch(url)
           .then(function(r) { return r.json(); })
           .then(function(maskData) {
@@ -371,11 +380,19 @@
           });
       });
     }
-    function loadData() {
+    function getDryRunRows() {
+      var slider = document.getElementById('dry-run-rows-slider');
+      if (!slider) return 10;
+      var n = parseInt(slider.value, 10);
+      return (n >= 1 && n <= 10) ? n : 10;
+    }
+    function loadData(maxRows) {
       if (!tempDir) return;
+      if (maxRows == null) maxRows = getDryRunRows();
       if (triggerBtn) triggerBtn.disabled = true;
       container.innerHTML = '<p>Loading data…</p>';
-      fetch('/api/dry-run/files?temp_dir=' + encodeURIComponent(tempDir))
+      var url = '/api/dry-run/files?temp_dir=' + encodeURIComponent(tempDir) + '&max_rows=' + encodeURIComponent(String(maxRows));
+      fetch(url)
         .then(function(r) { return r.json(); })
         .then(onDataLoaded)
         .catch(function(err) {
@@ -385,9 +402,39 @@
     }
     function runDryRun() {
       if (!tempDir) return;
-      loadData();
+      var maxRows = getDryRunRows();
+      if (hasRunDelphix) {
+        loadData(maxRows);
+        return;
+      }
+      if (triggerBtn) triggerBtn.disabled = true;
+      container.innerHTML = '<p>Running synthetic data generation…</p>';
+      fetch(runDryRunUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok && data.delphix) {
+            blobNames = data.delphix.blob_names || [];
+            fileFormatIds = data.delphix.file_format_ids || [];
+            hasRunDelphix = true;
+            loadData(maxRows);
+          } else {
+            if (triggerBtn) triggerBtn.disabled = false;
+            container.innerHTML = '<p class="error">' + escapeHtml(data.error || 'Dry run failed') + '</p>';
+          }
+        })
+        .catch(function(err) {
+          if (triggerBtn) triggerBtn.disabled = false;
+          container.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+        });
     }
-    loadData();
+    var rowsSlider = document.getElementById('dry-run-rows-slider');
+    var rowsValueEl = document.getElementById('dry-run-rows-value');
+    if (rowsSlider && rowsValueEl) {
+      rowsSlider.addEventListener('input', function() {
+        rowsValueEl.textContent = this.value;
+        this.setAttribute('aria-valuenow', this.value);
+      });
+    }
     if (triggerBtn) triggerBtn.addEventListener('click', runDryRun);
     function createRuleModal() {
       var overlay = document.createElement('div');

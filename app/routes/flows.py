@@ -111,6 +111,24 @@ def upload_local(domain_id):
     return jsonify({"ok": True, "filename": cfg.get("upload_name", "")})
 
 
+@flows_bp.route("/run-dry-run", methods=["POST"])
+def run_dry_run(domain_id):
+    """Run Delphix synthetic data generation; called from step 2 when user clicks Dry Run."""
+    domain = get_domain(current_app, domain_id)
+    if not domain:
+        return jsonify({"ok": False, "error": "Domain not found"}), 404
+    cfg = session.get(SESSION_FLOW_CONFIG) or {}
+    temp_dir = session.get(SESSION_TEMP_DIR) or ""
+    if not temp_dir:
+        return jsonify({"ok": False, "error": "No temp data. Complete step 1 first."}), 400
+    ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
+    if not ok:
+        return jsonify({"ok": False, "error": result or "Delphix failed"}), 400
+    cfg["delphix"] = result
+    session[SESSION_FLOW_CONFIG] = cfg
+    return jsonify({"ok": True, "delphix": result})
+
+
 @flows_bp.route("/new", methods=["GET", "POST"])
 def new(domain_id):
     domain = get_domain(current_app, domain_id)
@@ -128,34 +146,20 @@ def new(domain_id):
                 }
                 session[SESSION_TEMP_DIR] = ""
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
-            # Local file: upload on submit (no config/temp_dir in form)
+            # Local file: upload on submit (no config/temp_dir in form); Delphix runs on step 2 when user clicks Dry Run
             if _handle_step1_local_upload(domain_id):
-                cfg = session.get(SESSION_FLOW_CONFIG) or {}
-                temp_dir = session.get(SESSION_TEMP_DIR) or ""
-                if cfg.get("file_type") == "csv":
-                    ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
-                    if not ok:
-                        return _render_flow_step1(current_app, domain_id, cfg, temp_dir, result)
-                    cfg["delphix"] = result
-                    session[SESSION_FLOW_CONFIG] = cfg
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
             # Local file: back from step 2 with no new file — keep existing session and go to step 2
             cfg = session.get(SESSION_FLOW_CONFIG) or {}
             if cfg.get("source_type") == "local" and session.get(SESSION_TEMP_DIR):
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
-            # SQL/Blob: config and temp_dir from form
+            # SQL/Blob: config and temp_dir from form; Delphix runs on step 2 when user clicks Dry Run
             config_json = request.form.get("config")
             temp_dir = request.form.get("temp_dir", "").strip()
             if config_json and temp_dir:
                 try:
                     session[SESSION_FLOW_CONFIG] = json.loads(config_json)
                     session[SESSION_TEMP_DIR] = temp_dir
-                    cfg = session.get(SESSION_FLOW_CONFIG) or {}
-                    ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
-                    if not ok:
-                        return _render_flow_step1(current_app, domain_id, cfg, temp_dir, result)
-                    cfg["delphix"] = result
-                    session[SESSION_FLOW_CONFIG] = cfg
                 except json.JSONDecodeError:
                     pass
             return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
@@ -212,16 +216,6 @@ def edit(domain_id, flow_id):
                 session[SESSION_TEMP_DIR] = ""
                 return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)
             if _handle_step1_local_upload(domain_id):
-                cfg = session.get(SESSION_FLOW_CONFIG) or {}
-                temp_dir = session.get(SESSION_TEMP_DIR) or ""
-                ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
-                if not ok:
-                    return _render_flow_step1(
-                        current_app, domain_id, cfg, temp_dir, result,
-                        edit_flow_id=flow_id, flow=flow,
-                    )
-                cfg["delphix"] = result
-                session[SESSION_FLOW_CONFIG] = cfg
                 return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)
             cfg = session.get(SESSION_FLOW_CONFIG) or {}
             if cfg.get("source_type") == "local" and session.get(SESSION_TEMP_DIR):
@@ -232,15 +226,6 @@ def edit(domain_id, flow_id):
                 try:
                     session[SESSION_FLOW_CONFIG] = json.loads(config_json)
                     session[SESSION_TEMP_DIR] = temp_dir
-                    cfg = session.get(SESSION_FLOW_CONFIG) or {}
-                    ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
-                    if not ok:
-                        return _render_flow_step1(
-                            current_app, domain_id, cfg, temp_dir, result,
-                            edit_flow_id=flow_id, flow=flow,
-                        )
-                    cfg["delphix"] = result
-                    session[SESSION_FLOW_CONFIG] = cfg
                 except json.JSONDecodeError:
                     pass
             return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)

@@ -190,8 +190,10 @@ form textarea { min-height: 100px; }
 .dry-run-local-placeholder { padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6; }
 
 .dry-run-section { margin-bottom: 1rem; }
+.dry-run-rows-wrap { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.dry-run-rows-label { font-weight: 500; }
+.dry-run-rows-value { min-width: 1.5rem; font-variant-numeric: tabular-nums; }
 .dry-run-section .btn { margin-right: 0.5rem; }
-.dry-run-hint { display: inline-block; margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem; }
 .dry-run-list { list-style: none; padding: 0; margin: 0; }
 .dry-run-list details { margin-bottom: 0.5rem; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
 .dry-run-list details.dry-run-details summary { list-style: none; }
