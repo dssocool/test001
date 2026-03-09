@@ -151,6 +151,9 @@ form textarea { min-height: 100px; }
 .step1-upload-btn { width: 100%; margin-bottom: 0.5rem; }
 .step1-uploaded-filename { margin: 0; font-size: 0.9rem; color: #137333; }
 .step1-uploaded-filename.error { color: #d93025; }
+.step1-file-type-wrap { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.step1-file-type-label { font-weight: 500; }
+.step1-file-type-select { min-width: 6rem; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
 
 .defined-sources-title { margin: 0 0 0.25rem; font-size: 1.35rem; font-weight: 700; color: #202124; }
 .defined-sources-subtitle { margin: 0 0 0.75rem; font-size: 0.95rem; color: #5f6368; }

@@ -94,6 +94,10 @@ def _handle_step1_local_upload(domain_id):
         "delimiter": delimiter,
         "has_header": has_header,
         "end_of_record": end_of_record,
+        "detected_file_type": detected.get("file_type", "csv"),
+        "detected_delimiter": detected.get("delimiter", ","),
+        "detected_has_header": detected.get("has_header", True),
+        "detected_end_of_record": detected.get("end_of_record", "\n"),
     }
     session[SESSION_TEMP_DIR] = subdir
     return True
@@ -108,7 +112,46 @@ def upload_local(domain_id):
     if not _handle_step1_local_upload(domain_id):
         return jsonify({"ok": False, "error": "No file or invalid file"}), 400
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
-    return jsonify({"ok": True, "filename": cfg.get("upload_name", "")})
+    detected = {
+        "file_type": cfg.get("detected_file_type", cfg.get("file_type", "csv")),
+        "delimiter": cfg.get("detected_delimiter", cfg.get("delimiter", ",")),
+        "has_header": cfg.get("detected_has_header", True),
+        "end_of_record": cfg.get("detected_end_of_record", "\n"),
+    }
+    return jsonify({
+        "ok": True,
+        "filename": cfg.get("upload_name", ""),
+        "file_type": cfg.get("file_type", "csv"),
+        "delimiter": cfg.get("delimiter", ","),
+        "has_header": cfg.get("has_header", True),
+        "end_of_record": cfg.get("end_of_record", "\n"),
+        "detected": detected,
+    })
+
+
+@flows_bp.route("/update-local-config", methods=["POST"])
+def update_local_config(domain_id):
+    """Update local file config (file_type, delimiter, etc.) in session. Used when user adjusts file type after upload."""
+    domain = get_domain(current_app, domain_id)
+    if not domain:
+        return jsonify({"ok": False, "error": "Domain not found"}), 404
+    cfg = session.get(SESSION_FLOW_CONFIG) or {}
+    if cfg.get("source_type") != "local":
+        return jsonify({"ok": False, "error": "Not a local file flow"}), 400
+    data = request.get_json(silent=True) or {}
+    if "file_type" in data:
+        v = (data.get("file_type") or "csv").strip().lower()
+        if v in ("csv", "json", "xml", "parquet"):
+            cfg["file_type"] = v
+    if "delimiter" in data:
+        cfg["delimiter"] = data["delimiter"] if data["delimiter"] is not None else ","
+    if "has_header" in data:
+        cfg["has_header"] = data["has_header"] in (True, "true", "1", "yes")
+    if "end_of_record" in data:
+        e = (data.get("end_of_record") or "\n")
+        cfg["end_of_record"] = "\r\n" if e in ("\r\n", "crlf", "windows") else "\n"
+    session[SESSION_FLOW_CONFIG] = cfg
+    return jsonify({"ok": True})
 
 
 @flows_bp.route("/run-dry-run", methods=["POST"])

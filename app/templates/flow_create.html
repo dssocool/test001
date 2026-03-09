@@ -167,6 +167,15 @@
     <input type="file" id="step1-local-file" name="file" accept=".csv,.txt,.json,.xml,.parquet" class="step1-local-file-input" aria-label="Choose file">
     <button type="button" id="step1-upload-file-btn" class="btn btn-primary step1-upload-btn">Upload file</button>
     <p id="step1-uploaded-filename" class="step1-uploaded-filename" {% if not (flow_config.source_type == 'local' and flow_config.get('upload_name')) %}hidden{% endif %}>{% if flow_config.source_type == 'local' and flow_config.get('upload_name') %}Uploaded: {{ flow_config.upload_name }}{% endif %}</p>
+    <div id="step1-file-type-wrap" class="step1-file-type-wrap" {% if not (flow_config.source_type == 'local' and flow_config.get('upload_name')) %}hidden{% endif %}>
+      <label for="step1-local-file-type" class="step1-file-type-label">Detected file type:</label>
+      <select id="step1-local-file-type" name="local_file_type" class="step1-file-type-select" aria-label="File type">
+        <option value="csv" {% if (flow_config.get('file_type') or 'csv') == 'csv' %}selected{% endif %}>CSV</option>
+        <option value="json" {% if flow_config.get('file_type') == 'json' %}selected{% endif %}>JSON</option>
+        <option value="xml" {% if flow_config.get('file_type') == 'xml' %}selected{% endif %}>XML</option>
+        <option value="parquet" {% if flow_config.get('file_type') == 'parquet' %}selected{% endif %}>Parquet</option>
+      </select>
+    </div>
   </div>
 </div>
 </div>
@@ -551,6 +560,7 @@
   var step1TempDir = '';
   var localFileUploaded = {{ 'true' if (flow_config.source_type == 'local' and flow_config.get('upload_name') and temp_dir) else 'false' }};
   var uploadLocalUrl = {{ url_for('flows_bp.upload_local', domain_id=domain.id)|tojson }};
+  var updateLocalConfigUrl = {{ url_for('flows_bp.update_local_config', domain_id=domain.id)|tojson }};
 
   function hasSourceConfigured() {
     return (step1Config.source_type && step1TempDir) || localFileUploaded;
@@ -649,6 +659,12 @@
               uploadedFilenameEl.removeAttribute('hidden');
               uploadedFilenameEl.classList.remove('error');
             }
+            var typeWrap = document.getElementById('step1-file-type-wrap');
+            var typeSelect = document.getElementById('step1-local-file-type');
+            if (typeWrap) {
+              typeWrap.removeAttribute('hidden');
+              if (typeSelect && data.file_type) typeSelect.value = data.file_type;
+            }
             document.querySelectorAll('.step1-card[data-step1-card]').forEach(function(c) {
               c.classList.remove('step1-card-selected');
               c.setAttribute('aria-pressed', c.getAttribute('data-step1-card') === 'b' ? 'true' : 'false');
@@ -673,6 +689,17 @@
           }
         });
       localFileInput.value = '';
+    });
+  }
+  var localFileTypeSelect = document.getElementById('step1-local-file-type');
+  if (localFileTypeSelect) {
+    localFileTypeSelect.addEventListener('change', function() {
+      var fileType = this.value;
+      fetch(updateLocalConfigUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_type: fileType })
+      }).then(function(r) { return r.json(); }).catch(function() {});
     });
   }
 
