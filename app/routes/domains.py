@@ -8,8 +8,9 @@ domains_bp = Blueprint("domains_bp", __name__)
 def new():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
         if name:
-            create_domain(current_app, name)
+            create_domain(current_app, name, description=description)
         return redirect(url_for("main_bp.index"), code=303)
     return render_template("domain_create.html")
 
@@ -21,8 +22,9 @@ def edit(domain_id):
         return "Domain not found", 404
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
         if name:
-            update_domain(current_app, domain_id, name)
+            update_domain(current_app, domain_id, name, description=description)
         return redirect(url_for("main_bp.index"), code=303)
     return render_template("domain_edit.html", domain=domain)
 

@@ -30,9 +30,11 @@ def create_app(config_overrides=None):
     from app.routes.main import main_bp
     from app.routes.domains import domains_bp
     from app.routes.flows import flows_bp
+    from app.routes.settings import settings_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(domains_bp, url_prefix="/domains")
     app.register_blueprint(flows_bp, url_prefix="/domains/<int:domain_id>/flows")
+    app.register_blueprint(settings_bp)
 
     from app.routes.api.sql import sql_bp
     from app.routes.api.blob import blob_bp

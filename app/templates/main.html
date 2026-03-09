@@ -1,38 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Synthetic Data Generator{% endblock %}
+{% block title %}Domains - Synthetic Data Generator{% endblock %}
 {% block content %}
-<h1>Synthetic Data Flows</h1>
-<p><a href="{{ url_for('domains_bp.new') }}" class="btn">Create domain</a></p>
-
-{% for domain in domains %}
-<section class="card domain-section">
-  <div class="domain-header">
-    <span class="domain-name domain-name-badge">{{ domain.name }}</span>
-    <div class="domain-actions">
-      <a href="{{ url_for('domains_bp.edit', domain_id=domain.id) }}" class="btn btn-secondary">Edit</a>
-      <form method="post" action="{{ url_for('domains_bp.delete', domain_id=domain.id) }}" class="domain-delete-form" onsubmit="return confirm('Delete this domain and its data flows?');">
-        <button type="submit" class="btn btn-danger">Delete</button>
-      </form>
-      <a href="{{ url_for('flows_bp.new', domain_id=domain.id) }}" class="btn btn-secondary">Create data flow</a>
+<div class="domains-header">
+  <h1>Domains</h1>
+  <div class="domains-header-actions">
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" id="domains-search" class="search-input" placeholder="Search" aria-label="Search domains">
     </div>
+    <a href="{{ url_for('domains_bp.new') }}" class="btn btn-primary">Create New Domain</a>
+    <a href="#" class="help-icon" aria-label="Help" title="Help">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </a>
   </div>
-  <ul class="flows">
-    {% for flow in domain.flows %}
-    <li class="flow-item">
-      <span class="flow-name">{{ flow.name or 'Flow #' ~ flow.id }}</span>
-      <div class="flow-actions">
-        <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="btn btn-small btn-secondary">Edit</a>
-        <form method="post" action="{{ url_for('flows_bp.delete_flow_route', domain_id=domain.id, flow_id=flow.id) }}" class="flow-delete-form" onsubmit="return confirm('Delete this data flow?');">
-          <button type="submit" class="btn btn-small btn-danger">Delete</button>
-        </form>
+</div>
+
+{% if domains %}
+<div class="domains-grid" id="domains-grid">
+  {% for domain in domains %}
+  <article class="domain-card" data-domain-name="{{ domain.name|e }}" data-domain-desc="{{ (domain.description|default(''))|e }}">
+    <div class="domain-card-header">
+      <h2 class="domain-card-title">{{ domain.name }}</h2>
+      <div class="domain-card-menu-wrap">
+        <button type="button" class="domain-card-menu-btn" aria-label="Domain options" aria-expanded="false" aria-haspopup="true"></button>
+        <div class="domain-card-dropdown" hidden>
+          <a href="{{ url_for('domains_bp.edit', domain_id=domain.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('domains_bp.delete', domain_id=domain.id) }}" class="domain-delete-form-inline" onsubmit="return confirm('Delete this domain and its data flows?');">
+            <button type="submit" class="domain-dropdown-delete">Delete</button>
+          </form>
+        </div>
       </div>
-    </li>
-    {% else %}
-    <li><em>No data flows yet.</em></li>
-    {% endfor %}
-  </ul>
-</section>
+    </div>
+    <p class="domain-card-desc">{{ domain.description|default('No description.') }}</p>
+    <h3 class="domain-card-flows-heading">Data Flows</h3>
+    <ul class="domain-card-flows">
+      {% for flow in domain.flows %}
+      <li class="domain-card-flow-item">
+        <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="domain-card-flow-link">
+          <span class="domain-card-flow-name">{{ flow.name or 'Flow #' ~ flow.id }}</span>
+          <span class="domain-card-flow-arrow" aria-hidden="true">→</span>
+        </a>
+      </li>
+      {% else %}
+      <li class="domain-card-flow-empty"><em>No data flows yet.</em></li>
+      {% endfor %}
+    </ul>
+    <div class="domain-card-footer">
+      <a href="{{ url_for('flows_bp.new', domain_id=domain.id) }}" class="btn btn-create-flow">Create New Data Flow</a>
+      <span class="domain-status">
+        <span class="domain-status-dot"></span>
+        <span>Status</span>
+      </span>
+    </div>
+  </article>
+  {% endfor %}
+</div>
 {% else %}
-<p>No domains yet. <a href="{{ url_for('domains_bp.new') }}">Create a domain</a> to get started.</p>
-{% endfor %}
+<p class="domains-empty">No domains yet. <a href="{{ url_for('domains_bp.new') }}">Create a domain</a> to get started.</p>
+{% endif %}
 {% endblock %}

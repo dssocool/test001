@@ -5,6 +5,8 @@
 <form method="post" action="{{ url_for('domains_bp.new') }}">
   <label for="name">Domain name</label>
   <input type="text" id="name" name="name" required placeholder="e.g. Sales">
+  <label for="description">Description (optional)</label>
+  <textarea id="description" name="description" rows="3" placeholder="Brief description of this domain"></textarea>
   <div class="form-actions">
     <button type="submit" class="btn">Save</button>
     <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>

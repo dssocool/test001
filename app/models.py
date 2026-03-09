@@ -38,6 +38,7 @@ def init_db(app):
             CREATE TABLE IF NOT EXISTS domain (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
+                description TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS data_flow (
@@ -50,12 +51,18 @@ def init_db(app):
             CREATE INDEX IF NOT EXISTS idx_data_flow_domain ON data_flow(domain_id);
         """)
         db.commit()
+        # Add description column to existing domain table if missing
+        cur = db.execute("PRAGMA table_info(domain)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "description" not in columns:
+            db.execute("ALTER TABLE domain ADD COLUMN description TEXT DEFAULT ''")
+            db.commit()
 
 
 def get_domains_with_flows(app):
     db = get_db(app)
     cur = db.execute(
-        "SELECT id, name, created_at FROM domain ORDER BY name"
+        "SELECT id, name, description, created_at FROM domain ORDER BY name"
     )
     domains = [dict(row) for row in cur.fetchall()]
     for d in domains:
@@ -70,9 +77,12 @@ def get_domains_with_flows(app):
     return domains
 
 
-def create_domain(app, name):
+def create_domain(app, name, description=""):
     with db_connection(app) as db:
-        cur = db.execute("INSERT INTO domain (name) VALUES (?)", (name,))
+        cur = db.execute(
+            "INSERT INTO domain (name, description) VALUES (?, ?)",
+            (name, (description or "").strip()),
+        )
         return cur.lastrowid
 
 
@@ -87,7 +97,10 @@ def create_flow(app, domain_id, name, config):
 
 def get_domain(app, domain_id):
     db = get_db(app)
-    cur = db.execute("SELECT id, name, created_at FROM domain WHERE id = ?", (domain_id,))
+    cur = db.execute(
+        "SELECT id, name, description, created_at FROM domain WHERE id = ?",
+        (domain_id,),
+    )
     row = cur.fetchone()
     return dict(row) if row else None
 
@@ -98,9 +111,12 @@ def get_flow_count(app, domain_id):
     return cur.fetchone()[0] or 0
 
 
-def update_domain(app, domain_id, name):
+def update_domain(app, domain_id, name, description=""):
     with db_connection(app) as db:
-        db.execute("UPDATE domain SET name = ? WHERE id = ?", (name, domain_id))
+        db.execute(
+            "UPDATE domain SET name = ?, description = ? WHERE id = ?",
+            (name, (description or "").strip(), domain_id),
+        )
 
 
 def delete_domain(app, domain_id):

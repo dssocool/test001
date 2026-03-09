@@ -5,6 +5,8 @@
 <form method="post" action="{{ url_for('domains_bp.edit', domain_id=domain.id) }}">
   <label for="name">Domain name</label>
   <input type="text" id="name" name="name" value="{{ domain.name }}" required placeholder="e.g. Sales">
+  <label for="description">Description (optional)</label>
+  <textarea id="description" name="description" rows="3" placeholder="Brief description of this domain">{{ domain.description|default('') }}</textarea>
   <div class="form-actions">
     <button type="submit" class="btn">Save</button>
     <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
