@@ -162,14 +162,52 @@ def run_dry_run(domain_id):
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
     temp_dir = session.get(SESSION_TEMP_DIR) or ""
+
+    # Optional JSON body: max_rows (1-10) for SQL dry run when temp_dir not yet set
+    max_rows = 10
+    if request.get_data():
+        try:
+            body = request.get_json(silent=True) or {}
+            max_rows = body.get("max_rows", 10)
+            if max_rows is not None:
+                max_rows = max(1, min(10, int(max_rows)))
+        except (TypeError, ValueError):
+            pass
+
+    # SQL with no temp_dir yet: fetch from SQL with max_rows, then run Delphix
+    if cfg.get("source_type") == "sql" and not temp_dir:
+        server = cfg.get("server", "").strip()
+        database = cfg.get("database", "").strip()
+        export_mode = cfg.get("export_mode") or "tables"
+        tables = cfg.get("tables") or []
+        query = (cfg.get("query") or "").strip()
+        if not server or not database:
+            return jsonify({"ok": False, "error": "SQL server and database required"}), 400
+        if export_mode == "tables" and not tables:
+            return jsonify({"ok": False, "error": "Select at least one table or provide a query"}), 400
+        if export_mode == "query" and not query:
+            return jsonify({"ok": False, "error": "Select at least one table or provide a query"}), 400
+        from app.services.sql_source import fetch_sql_dry_run
+        temp_base = current_app.config["TEMP_BASE"]
+        tables_or_query = tables if export_mode == "tables" else query
+        ok, result = fetch_sql_dry_run(server, database, export_mode, tables_or_query, max_rows, temp_base)
+        if not ok:
+            return jsonify({"ok": False, "error": result}), 400
+        temp_dir = result
+        session[SESSION_TEMP_DIR] = temp_dir
+
     if not temp_dir:
         return jsonify({"ok": False, "error": "No temp data. Complete step 1 first."}), 400
+
     ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
     if not ok:
         return jsonify({"ok": False, "error": result or "Delphix failed"}), 400
     cfg["delphix"] = result
     session[SESSION_FLOW_CONFIG] = cfg
-    return jsonify({"ok": True, "delphix": result})
+    response = {"ok": True, "delphix": result}
+    if cfg.get("source_type") == "sql":
+        response["temp_dir"] = temp_dir
+    return jsonify(response)
 
 
 @flows_bp.route("/new", methods=["GET", "POST"])
@@ -196,13 +234,17 @@ def new(domain_id):
             cfg = session.get(SESSION_FLOW_CONFIG) or {}
             if cfg.get("source_type") == "local" and session.get(SESSION_TEMP_DIR):
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
-            # SQL/Blob: config and temp_dir from form; Delphix runs on step 2 when user clicks Dry Run
+            # SQL/Blob: config and temp_dir from form; SQL may have empty temp_dir (fetched on step 2)
             config_json = request.form.get("config")
             temp_dir = request.form.get("temp_dir", "").strip()
-            if config_json and temp_dir:
+            if config_json:
                 try:
-                    session[SESSION_FLOW_CONFIG] = json.loads(config_json)
-                    session[SESSION_TEMP_DIR] = temp_dir
+                    cfg = json.loads(config_json)
+                    session[SESSION_FLOW_CONFIG] = cfg
+                    if cfg.get("source_type") == "sql":
+                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty for SQL
+                    elif temp_dir:
+                        session[SESSION_TEMP_DIR] = temp_dir
                 except json.JSONDecodeError:
                     pass
             return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
@@ -265,10 +307,14 @@ def edit(domain_id, flow_id):
                 return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)
             config_json = request.form.get("config")
             temp_dir = request.form.get("temp_dir", "").strip()
-            if config_json and temp_dir:
+            if config_json:
                 try:
-                    session[SESSION_FLOW_CONFIG] = json.loads(config_json)
-                    session[SESSION_TEMP_DIR] = temp_dir
+                    cfg = json.loads(config_json)
+                    session[SESSION_FLOW_CONFIG] = cfg
+                    if cfg.get("source_type") == "sql":
+                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty for SQL
+                    elif temp_dir:
+                        session[SESSION_TEMP_DIR] = temp_dir
                 except json.JSONDecodeError:
                     pass
             return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)

@@ -93,10 +93,8 @@
             <div class="field-group">
               <label for="sql-auth">Authentication</label>
               <select id="sql-auth">
-                <option value="">Authentication</option>
-                <option value="sql_login">SQL Login</option>
-                <option value="windows">Windows Authentication</option>
-                <option value="azure_ad">Azure AD</option>
+                <option value="entra_integrated" selected>Microsoft Entra Integrated</option>
+                <option value="sql_server">SQL Server Authentication</option>
               </select>
             </div>
             <div class="validate-btn-wrap">
@@ -104,17 +102,15 @@
             </div>
             <span id="sql-validate-msg" class="error"></span>
             <div id="sql-after-validate" style="display:none; margin-top:1rem;">
-              <label><input type="radio" name="sql-mode" value="tables" checked> Export multiple tables</label>
-              <label><input type="radio" name="sql-mode" value="query"> Export by query</label>
+              <label><input type="radio" name="sql-mode" value="tables" checked> By Table</label>
+              <label><input type="radio" name="sql-mode" value="query"> By Query</label>
               <div id="sql-tables-box" style="margin-top:0.5rem;">
                 <label>Select tables</label>
                 <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
-                <button type="button" id="sql-export-tables" class="btn" style="margin-top:0.5rem;">Export top 10 rows</button>
               </div>
               <div id="sql-query-box" style="margin-top:0.5rem; display:none;">
                 <label>Query</label>
                 <textarea id="sql-query" placeholder="SELECT * FROM ..."></textarea>
-                <button type="button" id="sql-export-query" class="btn">Run and export top 10 rows</button>
               </div>
             </div>
           </div>
@@ -214,12 +210,13 @@
 <script>
   (function() {
     var tempDir = {{ temp_dir|tojson }};
+    var sourceType = {{ flow_config.source_type|tojson }};
     var skipLocalNoData = {{ 'true' if (flow_config.source_type == 'local' and flow_config.get('skip_source_config') and not temp_dir) else 'false' }};
     var container = document.getElementById('dry-run-container');
     var triggerBtn = document.getElementById('dry-run-trigger-btn');
     if (!container) return;
     if (skipLocalNoData) return;
-    if (!tempDir) {
+    if (!tempDir && sourceType !== 'sql') {
       var section = document.querySelector('.dry-run-section');
       if (section) section.innerHTML = '';
       container.innerHTML = '<p class="error">No temp data. Go back and complete step 1.</p>';
@@ -402,8 +399,35 @@
         });
     }
     function runDryRun() {
-      if (!tempDir) return;
       var maxRows = getDryRunRows();
+      if (sourceType === 'sql' && !tempDir) {
+        if (triggerBtn) triggerBtn.disabled = true;
+        container.innerHTML = '<p>Running synthetic data generation…</p>';
+        fetch(runDryRunUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_rows: maxRows })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok && data.delphix) {
+              if (data.temp_dir) tempDir = data.temp_dir;
+              blobNames = data.delphix.blob_names || [];
+              fileFormatIds = data.delphix.file_format_ids || [];
+              hasRunDelphix = true;
+              loadData(maxRows);
+            } else {
+              if (triggerBtn) triggerBtn.disabled = false;
+              container.innerHTML = '<p class="error">' + escapeHtml(data.error || 'Dry run failed') + '</p>';
+            }
+          })
+          .catch(function(err) {
+            if (triggerBtn) triggerBtn.disabled = false;
+            container.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+          });
+        return;
+      }
+      if (!tempDir) return;
       if (hasRunDelphix) {
         loadData(maxRows);
         return;
@@ -563,7 +587,39 @@
   var updateLocalConfigUrl = {{ url_for('flows_bp.update_local_config', domain_id=domain.id)|tojson }};
 
   function hasSourceConfigured() {
-    return (step1Config.source_type && step1TempDir) || localFileUploaded;
+    if (localFileUploaded) return true;
+    if (step1Config.source_type === 'sql') {
+      if (!step1Config.server || !step1Config.database) return false;
+      if (step1Config.export_mode === 'tables')
+        return step1Config.tables && step1Config.tables.length > 0;
+      if (step1Config.export_mode === 'query')
+        return step1Config.query && String(step1Config.query).trim() !== '';
+      return false;
+    }
+    if (step1Config.source_type === 'blob')
+      return !!step1TempDir;
+    return false;
+  }
+
+  function updateSqlConfig() {
+    var server = document.getElementById('sql-server');
+    var database = document.getElementById('sql-database');
+    var modeRadio = document.querySelector('input[name="sql-mode"]:checked');
+    var tablesSel = document.getElementById('sql-tables');
+    var queryEl = document.getElementById('sql-query');
+    if (!server || !database) return;
+    step1Config.source_type = 'sql';
+    step1Config.server = server.value.trim();
+    step1Config.database = database.value.trim();
+    step1Config.export_mode = (modeRadio && modeRadio.value) || 'tables';
+    if (step1Config.export_mode === 'tables' && tablesSel) {
+      step1Config.tables = [].map.call(tablesSel.selectedOptions, function(o) { return o.value; });
+      step1Config.query = '';
+    } else if (queryEl) {
+      step1Config.query = queryEl.value.trim();
+      step1Config.tables = [];
+    }
+    enableNext();
   }
 
   function updateWarningBanner() {
@@ -636,6 +692,21 @@
     var src = (checked && checked.value) ? checked.value : 'sql';
     setActiveSource(src);
   })();
+
+  var step1Form = document.getElementById('step1-form');
+  if (step1Form) {
+    step1Form.addEventListener('submit', function(e) {
+      if (step1Config.source_type === 'sql' && !hasSourceConfigured()) {
+        e.preventDefault();
+        var banner = document.getElementById('step1-warning-banner');
+        if (banner) {
+          banner.textContent = 'Select at least one table or provide a query';
+          banner.removeAttribute('hidden');
+        }
+        return false;
+      }
+    });
+  }
 
   var uploadFileBtn = document.getElementById('step1-upload-file-btn');
   var localFileInput = document.getElementById('step1-local-file');
@@ -714,8 +785,13 @@
         isTables.style.display = 'none';
         isQuery.style.display = 'block';
       }
+      updateSqlConfig();
     });
   });
+  var sqlTablesEl = document.getElementById('sql-tables');
+  if (sqlTablesEl) sqlTablesEl.addEventListener('change', updateSqlConfig);
+  var sqlQueryEl = document.getElementById('sql-query');
+  if (sqlQueryEl) sqlQueryEl.addEventListener('input', updateSqlConfig);
 
   document.getElementById('sql-validate').addEventListener('click', function() {
     var server = document.getElementById('sql-server').value.trim();
@@ -731,6 +807,10 @@
         msg.textContent = 'Connected.';
         msg.className = 'success';
         document.getElementById('sql-after-validate').style.display = 'block';
+        step1Config.source_type = 'sql';
+        step1Config.server = server;
+        step1Config.database = database;
+        updateSqlConfig();
         fetch('/api/sql/tables?server=' + encodeURIComponent(server) + '&database=' + encodeURIComponent(database))
           .then(function(r) { return r.json(); })
           .then(function(d) {
@@ -744,6 +824,7 @@
                 sel.appendChild(opt);
               });
             }
+            updateSqlConfig();
           });
       } else {
         msg.textContent = data.error || 'Connection failed';
@@ -752,43 +833,6 @@
     }).catch(function(e) {
       msg.textContent = e.message || 'Request failed';
       msg.className = 'error';
-    });
-  });
-
-  document.getElementById('sql-export-tables').addEventListener('click', function() {
-    var server = document.getElementById('sql-server').value.trim();
-    var database = document.getElementById('sql-database').value.trim();
-    var sel = document.getElementById('sql-tables');
-    var tables = [].map.call(sel.selectedOptions, function(o) { return o.value; });
-    if (!tables.length) return;
-    fetch('/api/sql/export-tables', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ server: server, database: database, tables: tables })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.ok) {
-        step1Config = { source_type: 'sql', server: server, database: database, export_mode: 'tables', tables: tables };
-        step1TempDir = data.temp_dir;
-        enableNext();
-      }
-    });
-  });
-
-  document.getElementById('sql-export-query').addEventListener('click', function() {
-    var server = document.getElementById('sql-server').value.trim();
-    var database = document.getElementById('sql-database').value.trim();
-    var query = document.getElementById('sql-query').value.trim();
-    if (!query) return;
-    fetch('/api/sql/export-query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ server: server, database: database, query: query })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.ok) {
-        step1Config = { source_type: 'sql', server: server, database: database, export_mode: 'query', query: query };
-        step1TempDir = data.temp_dir;
-        enableNext();
-      }
     });
   });
 
