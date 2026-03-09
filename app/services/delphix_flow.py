@@ -229,7 +229,7 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
         except DelphixClientError as e:
             return False, f"Delphix get masking execution: {e}"
         status = (exec_resp.get("status") or "").strip().upper()
-        if status == "SUCCEEDED":
+        if status in ("SUCCEEDED", "WARNING"):
             break
         if status in ("FAILED", "ERROR", "CANCELLED", "CANCELED"):
             return False, f"Masking job failed with status: {status}"
