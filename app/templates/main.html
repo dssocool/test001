@@ -39,9 +39,13 @@
         <div class="domain-card-flow-row">
           <span class="domain-card-flow-name">{{ flow.name or 'Flow #' ~ flow.id }}</span>
           <div class="domain-card-flow-actions">
-            <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="btn btn-small btn-secondary">Edit</a>
+            <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="domain-card-flow-icon-btn domain-card-flow-edit-btn" aria-label="Edit flow" title="Edit">
+              <svg class="domain-card-flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </a>
             <form method="post" action="{{ url_for('flows_bp.delete_flow_route', domain_id=domain.id, flow_id=flow.id) }}" class="domain-card-flow-delete-form" onsubmit="return confirm('Delete this data flow?');">
-              <button type="submit" class="btn btn-small domain-card-flow-delete-btn">Delete</button>
+              <button type="submit" class="domain-card-flow-icon-btn domain-card-flow-delete-btn" aria-label="Delete flow" title="Delete">
+                <svg class="domain-card-flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              </button>
             </form>
           </div>
         </div>
