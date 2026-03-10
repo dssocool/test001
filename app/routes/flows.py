@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import uuid
@@ -5,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, curren
 
 from app.models import get_domain, get_flow, get_flow_count, create_flow, update_flow, delete_flow
 from app.services.delphix_flow import run_delphix_flow
+from app.services.flow_config_persist import persist_flow_config
 
 flows_bp = Blueprint("flows_bp", __name__)
 SESSION_FLOW_CONFIG = "flow_config"
@@ -286,7 +288,8 @@ def new(domain_id):
                 except json.JSONDecodeError:
                     cfg = None
             if cfg is not None:
-                create_flow(current_app, domain_id, request.form.get("name"), cfg)
+                to_save = persist_flow_config(cfg, existing=None)
+                create_flow(current_app, domain_id, request.form.get("name"), to_save)
             session.pop(SESSION_FLOW_CONFIG, None)
             session.pop(SESSION_TEMP_DIR, None)
             return redirect(url_for("main_bp.index"), code=303)
@@ -358,12 +361,18 @@ def edit(domain_id, flow_id):
                 name = request.form.get("name", "").strip()
                 if not name:
                     name = flow.get("name")
-                update_flow(current_app, flow_id, name, cfg)
+                to_save = persist_flow_config(cfg, existing=flow.get("config"))
+                update_flow(current_app, flow_id, name, to_save)
             session.pop(SESSION_FLOW_CONFIG, None)
             session.pop(SESSION_TEMP_DIR, None)
             return redirect(url_for("main_bp.index"), code=303)
 
     step = request.args.get("step", type=int, default=1)
+    # Seed session from saved flow so step 1/2/3 show configured source without re-entering
+    if not session.get(SESSION_FLOW_CONFIG) and flow.get("config"):
+        session[SESSION_FLOW_CONFIG] = copy.deepcopy(flow["config"])
+    if session.get(SESSION_FLOW_CONFIG) and not session.get(SESSION_TEMP_DIR):
+        session[SESSION_TEMP_DIR] = ""
     flow_config = session.get(SESSION_FLOW_CONFIG) or {}
     temp_dir = session.get(SESSION_TEMP_DIR) or ""
     default_flow_name = "Flow {}".format(get_flow_count(current_app, domain_id) + 1)

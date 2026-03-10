@@ -83,11 +83,11 @@
             <div class="field-row">
               <div class="field-group">
                 <label for="sql-server">Server Address</label>
-                <input type="text" id="sql-server" placeholder="Server Address">
+                <input type="text" id="sql-server" name="sql_server" placeholder="Server Address" value="{{ flow_config.server|default('', true)|e }}">
               </div>
               <div class="field-group">
                 <label for="sql-database">Database Name</label>
-                <input type="text" id="sql-database" placeholder="Database Name">
+                <input type="text" id="sql-database" name="sql_database" placeholder="Database Name" value="{{ flow_config.database|default('', true)|e }}">
               </div>
             </div>
             <div class="field-group">
@@ -101,16 +101,16 @@
               <button type="button" id="sql-validate" class="btn">Test Connection</button>
             </div>
             <span id="sql-validate-msg" class="error"></span>
-            <div id="sql-after-validate" style="display:none; margin-top:1rem;">
-              <label><input type="radio" name="sql-mode" value="tables" checked> By Table</label>
-              <label><input type="radio" name="sql-mode" value="query"> By Query</label>
-              <div id="sql-tables-box" style="margin-top:0.5rem;">
+            <div id="sql-after-validate" style="display:{% if flow_config.source_type == 'sql' and (flow_config.server or flow_config.database) %}block{% else %}none{% endif %}; margin-top:1rem;">
+              <label><input type="radio" name="sql-mode" value="tables" {% if flow_config.get('export_mode', 'tables') != 'query' %}checked{% endif %}> By Table</label>
+              <label><input type="radio" name="sql-mode" value="query" {% if flow_config.get('export_mode') == 'query' %}checked{% endif %}> By Query</label>
+              <div id="sql-tables-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}none{% else %}block{% endif %};">
                 <label>Select tables</label>
                 <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
               </div>
-              <div id="sql-query-box" style="margin-top:0.5rem; display:none;">
+              <div id="sql-query-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}block{% else %}none{% endif %};">
                 <label>Query</label>
-                <textarea id="sql-query" placeholder="SELECT * FROM ..."></textarea>
+                <textarea id="sql-query" placeholder="SELECT * FROM ...">{{ flow_config.query|default('', true)|e }}</textarea>
               </div>
             </div>
           </div>
@@ -122,11 +122,11 @@
             <div class="field-row">
               <div class="field-group">
                 <label for="blob-account">Account name</label>
-                <input type="text" id="blob-account" placeholder="Storage account name">
+                <input type="text" id="blob-account" placeholder="Storage account name" value="{{ flow_config.account_name|default('', true)|e }}">
               </div>
               <div class="field-group">
                 <label for="blob-container">Container name</label>
-                <input type="text" id="blob-container" placeholder="Container name">
+                <input type="text" id="blob-container" placeholder="Container name" value="{{ flow_config.container|default('', true)|e }}">
               </div>
               <div class="field-group">
                 <label for="blob-key">Account key</label>
@@ -137,13 +137,13 @@
               </div>
             </div>
             <span id="blob-validate-msg" class="error"></span>
-            <div id="blob-after-validate" style="display:none; margin-top:1rem;">
+            <div id="blob-after-validate" style="display:{% if flow_config.source_type == 'blob' and flow_config.get('selected_blobs') %}block{% else %}none{% endif %}; margin-top:1rem;">
               <label>File type</label>
               <select id="blob-file-type"><option value="csv">CSV</option></select>
               <label>Prefix (optional)</label>
-              <input type="text" id="blob-prefix" placeholder="e.g. data/">
+              <input type="text" id="blob-prefix" placeholder="e.g. data/" value="{{ flow_config.prefix|default('', true)|e }}">
               <label>Delimiter</label>
-              <input type="text" id="blob-delimiter" value="," maxlength="2">
+              <input type="text" id="blob-delimiter" value="{{ flow_config.delimiter|default(',', true)|e }}" maxlength="2">
               <label>Select files</label>
               <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
             </div>
@@ -578,8 +578,10 @@
       {% elif flow_config.source_type == 'local' %}
       <dt>File</dt>
       <dd>{% if flow_config.get('skip_source_config') %}To be uploaded on next page{% else %}{{ flow_config.upload_name or 'Uploaded file' }}{% endif %}</dd>
+      {% if flow_config.get('file_type') %}
       <dt>File type</dt>
-      <dd>{{ flow_config.get('file_type') or 'csv' }}</dd>
+      <dd>{{ flow_config.get('file_type') }}</dd>
+      {% endif %}
       {% if flow_config.get('file_type') == 'csv' %}
       <dt>Has header</dt>
       <dd>{{ 'Yes' if flow_config.get('has_header', True) else 'No' }}</dd>
@@ -609,6 +611,19 @@
   var step1Config = {};
   var step1TempDir = '';
   var localFileUploaded = {{ 'true' if (flow_config.source_type == 'local' and flow_config.get('upload_name') and temp_dir) else 'false' }};
+  var flowConfigPrefill = {{ {
+    'source_type': flow_config.get('source_type'),
+    'server': flow_config.get('server') or '',
+    'database': flow_config.get('database') or '',
+    'export_mode': flow_config.get('export_mode') or 'tables',
+    'tables': flow_config.get('tables') or [],
+    'query': flow_config.get('query') or '',
+    'account_name': flow_config.get('account_name') or '',
+    'container': flow_config.get('container') or '',
+    'prefix': flow_config.get('prefix') or '',
+    'delimiter': flow_config.get('delimiter') or ',',
+    'selected_blobs': flow_config.get('selected_blobs') or []
+  }|tojson }};
   var uploadLocalUrl = {{ url_for('flows_bp.upload_local', domain_id=domain.id)|tojson }};
   var updateLocalConfigUrl = {{ url_for('flows_bp.update_local_config', domain_id=domain.id)|tojson }};
 
@@ -739,6 +754,63 @@
     var checked = document.querySelector('input[name="source_type"]:checked');
     var src = (checked && checked.value) ? checked.value : 'sql';
     setActiveSource(src);
+  })();
+
+  (function prefillFromSavedConfig() {
+    if (!flowConfigPrefill || !flowConfigPrefill.source_type) return;
+    if (flowConfigPrefill.source_type === 'sql' && flowConfigPrefill.server && flowConfigPrefill.database) {
+      step1Config.source_type = 'sql';
+      step1Config.server = flowConfigPrefill.server;
+      step1Config.database = flowConfigPrefill.database;
+      step1Config.export_mode = flowConfigPrefill.export_mode || 'tables';
+      if (step1Config.export_mode === 'query') {
+        step1Config.query = flowConfigPrefill.query || '';
+        step1Config.tables = [];
+        updateSqlConfig();
+      } else {
+        fetch('/api/sql/tables?server=' + encodeURIComponent(flowConfigPrefill.server) + '&database=' + encodeURIComponent(flowConfigPrefill.database))
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.ok && d.tables) {
+              var sel = document.getElementById('sql-tables');
+              if (sel) {
+                sel.innerHTML = '';
+                var savedTables = flowConfigPrefill.tables || [];
+                d.tables.forEach(function(t) {
+                  var opt = document.createElement('option');
+                  opt.value = t;
+                  opt.textContent = t;
+                  if (savedTables.indexOf(t) >= 0) opt.selected = true;
+                  sel.appendChild(opt);
+                });
+              }
+            }
+            updateSqlConfig();
+          }).catch(function() { updateSqlConfig(); });
+      }
+    }
+    if (flowConfigPrefill.source_type === 'blob' && flowConfigPrefill.selected_blobs && flowConfigPrefill.selected_blobs.length) {
+      var sel = document.getElementById('blob-list');
+      if (sel) {
+        sel.innerHTML = '';
+        flowConfigPrefill.selected_blobs.forEach(function(b) {
+          var opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          opt.selected = true;
+          sel.appendChild(opt);
+        });
+      }
+      step1Config.source_type = 'blob';
+      step1Config.account_name = flowConfigPrefill.account_name || '';
+      step1Config.container = flowConfigPrefill.container || '';
+      step1Config.prefix = flowConfigPrefill.prefix || '';
+      step1Config.delimiter = flowConfigPrefill.delimiter || ',';
+      step1Config.file_type = 'csv';
+      step1Config.selected_blobs = flowConfigPrefill.selected_blobs.slice();
+      step1Config.key = '';
+      enableNext();
+    }
   })();
 
   var step1Form = document.getElementById('step1-form');
