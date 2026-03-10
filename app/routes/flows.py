@@ -301,6 +301,11 @@ def new(domain_id):
         return redirect(url_for("flows_bp.new", domain_id=domain_id), code=303)
 
     step = request.args.get("step", type=int, default=1)
+    # New flow step 1 without resume: always start blank (session otherwise keeps prior upload/config).
+    # Step 2 "Back" uses ?step=1&resume=1 so wizard state is preserved.
+    if step == 1 and not request.args.get("resume"):
+        session.pop(SESSION_FLOW_CONFIG, None)
+        session.pop(SESSION_TEMP_DIR, None)
     flow_config = session.get(SESSION_FLOW_CONFIG) or {}
     temp_dir = session.get(SESSION_TEMP_DIR) or ""
     default_flow_name = "Flow {}".format(get_flow_count(current_app, domain_id) + 1)
