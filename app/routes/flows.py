@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import threading
 import uuid
 from flask import Blueprint, render_template, request, redirect, url_for, current_app, session, jsonify
 
@@ -466,6 +467,112 @@ def edit(domain_id, flow_id):
         default_flow_name=default_flow_name,
         delphix_error=None,
     )
+
+
+def _run_flow_full_data(app, domain_id, flow_id, cfg, blob_key_from_request=None):
+    """Background task: full-data export then run_delphix_flow. Uses app context."""
+    with app.app_context():
+        domain = get_domain(app, domain_id)
+        flow = get_flow(app, flow_id)
+        if not domain or not flow or flow["domain_id"] != domain_id:
+            return
+        if cfg.get("blob") and isinstance(cfg.get("blob"), dict) and blob_key_from_request:
+            cfg = copy.deepcopy(cfg)
+            cfg["blob"] = dict(cfg["blob"])
+            cfg["blob"]["key"] = blob_key_from_request
+        from app.services.flow_config_sources import get_source_blocks
+        sql_block, blob_block, local_block = get_source_blocks(cfg, "")
+        if not sql_block and not blob_block:
+            return
+        temp_base = app.config["TEMP_BASE"]
+        os.makedirs(temp_base, exist_ok=True)
+        combined_dir = os.path.join(temp_base, str(uuid.uuid4()))
+        os.makedirs(combined_dir, exist_ok=True)
+        try:
+            if sql_block:
+                from app.services.sql_source import export_sql_into_dir_full
+                tables_or_query = (
+                    sql_block["tables"] if sql_block.get("export_mode") == "tables" else sql_block.get("query", "")
+                )
+                ok, err = export_sql_into_dir_full(
+                    sql_block["server"],
+                    sql_block["database"],
+                    sql_block.get("export_mode") or "tables",
+                    tables_or_query,
+                    combined_dir,
+                )
+                if not ok:
+                    return
+            if blob_block:
+                from app.services.blob_source import export_blob_into_dir_full
+                ok, err = export_blob_into_dir_full(
+                    blob_block["account_name"],
+                    blob_block["container"],
+                    blob_block["key"],
+                    blob_block["selected_blobs"],
+                    blob_block.get("delimiter") or ",",
+                    combined_dir,
+                )
+                if not ok:
+                    return
+            if not os.listdir(combined_dir):
+                return
+            delimiter = ","
+            if blob_block:
+                delimiter = blob_block.get("delimiter") or ","
+            elif cfg.get("delimiter"):
+                delimiter = cfg.get("delimiter")
+            cfg["delimiter"] = delimiter
+            data_generation_key = domain.get("data_generation_key") or ""
+            run_delphix_flow(
+                combined_dir,
+                cfg,
+                app.config["INSTANCE_PATH"],
+                data_generation_key=data_generation_key,
+            )
+        finally:
+            try:
+                import shutil
+                if os.path.isdir(combined_dir):
+                    shutil.rmtree(combined_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+
+@flows_bp.route("/<int:flow_id>/run", methods=["POST"])
+def run_flow(domain_id, flow_id):
+    """Run flow on full data (export all rows, then Delphix masking). Accepts JSON body with optional blob_key."""
+    domain = get_domain(current_app, domain_id)
+    if not domain:
+        return jsonify({"ok": False, "error": "Domain not found"}), 404
+    flow = get_flow(current_app, flow_id)
+    if not flow or flow["domain_id"] != domain_id:
+        return jsonify({"ok": False, "error": "Flow not found"}), 404
+    cfg = copy.deepcopy(flow.get("config") or {})
+    from app.services.flow_config_sources import get_source_blocks
+    sql_block, blob_block, local_block = get_source_blocks(cfg, "")
+    if not sql_block and not blob_block:
+        return jsonify({
+            "ok": False,
+            "error": "Flow has no runnable source (SQL or Blob). Local file flows cannot be run from here.",
+        }), 400
+    blob_key = (request.get_json(silent=True) or {}).get("blob_key", "").strip()
+    if blob_block and not blob_key:
+        return jsonify({
+            "ok": False,
+            "error": "Storage account key required for Blob source. Provide blob_key in request body.",
+        }), 400
+    if blob_block:
+        cfg["blob"] = dict(cfg.get("blob") or {})
+        cfg["blob"]["key"] = blob_key
+    app = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_run_flow_full_data,
+        args=(app, domain_id, flow_id, cfg, blob_key if blob_block else None),
+    )
+    thread.daemon = True
+    thread.start()
+    return jsonify({"ok": True, "message": "Run started. Masking is running on full data in the background."}), 202
 
 
 @flows_bp.route("/<int:flow_id>/delete", methods=["POST"])

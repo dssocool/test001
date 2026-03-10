@@ -102,3 +102,52 @@ def export_blob_into_dir(account_name, container, key, selected_blobs, delimiter
     if not ok:
         return False, result
     return True, None
+
+
+def download_full_rows(account_name, container, key, blob_names, delimiter, temp_dir, filename_prefix=""):
+    """Download each blob and write all rows to CSV in temp_dir. No row limit."""
+    if not blob_names:
+        return False, "No blobs selected"
+    try:
+        client = _blob_client(account_name, key)
+        container_client = client.get_container_client(container)
+        files = []
+        for blob_name in blob_names:
+            blob_client = container_client.get_blob_client(blob_name)
+            data = blob_client.download_blob().readall()
+            try:
+                text = data.decode("utf-8")
+            except Exception:
+                text = data.decode("utf-8", errors="replace")
+            reader = csv.reader(StringIO(text), delimiter=delimiter)
+            rows = list(reader)
+            safe_name = os.path.basename(blob_name) or blob_name.replace("/", "_")
+            if not safe_name.lower().endswith(".csv"):
+                safe_name += ".csv"
+            prefix = (filename_prefix or "").strip()
+            if prefix and not prefix.endswith("_"):
+                prefix = prefix + "_"
+            fpath = os.path.join(temp_dir, prefix + safe_name)
+            with open(fpath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f, delimiter=delimiter)
+                for row in rows:
+                    writer.writerow(row)
+            files.append({"name": os.path.basename(fpath), "path": fpath})
+        return True, files
+    except Exception as e:
+        return False, str(e)
+
+
+def export_blob_into_dir_full(account_name, container, key, selected_blobs, delimiter, temp_dir):
+    """
+    Download full blobs into existing temp_dir with blob_ filename prefix; all rows.
+    Returns (True, None) or (False, error_message).
+    """
+    if not selected_blobs:
+        return False, "No files selected"
+    ok, _ = download_full_rows(
+        account_name, container, key, selected_blobs, delimiter or ",", temp_dir, filename_prefix="blob"
+    )
+    if not ok:
+        return False, _
+    return True, None

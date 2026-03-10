@@ -190,3 +190,90 @@ def export_sql_into_dir(server, database, export_mode, tables_or_query, max_rows
     if not ok:
         return False, result
     return True, None
+
+
+_CHUNK_SIZE = 10000
+
+
+def export_tables_full(server, database, table_list, temp_dir, filename_prefix=""):
+    """Export all rows from each table to CSV files in temp_dir. Streams in chunks to limit memory."""
+    if not table_list:
+        return False, "No tables selected"
+    prefix = (filename_prefix or "").strip()
+    if prefix and not prefix.endswith("_"):
+        prefix = prefix + "_"
+    try:
+        import pyodbc
+        conn = pyodbc.connect(_conn_str(server, database))
+        cur = conn.cursor()
+        files = []
+        for qual in table_list:
+            parts = qual.split(".", 1)
+            if len(parts) == 2:
+                schema, name = parts
+            else:
+                schema, name = "dbo", qual
+            safe_name = name.replace(" ", "_").replace(".", "_")
+            fpath = os.path.join(temp_dir, f"{prefix}{safe_name}.csv")
+            cur.execute(f"SELECT * FROM [{schema}].[{name}]")
+            with open(fpath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow([d[0] for d in cur.description])
+                while True:
+                    rows = cur.fetchmany(_CHUNK_SIZE)
+                    if not rows:
+                        break
+                    writer.writerows(rows)
+            files.append({"name": os.path.basename(fpath), "path": fpath})
+        conn.close()
+        return True, files
+    except Exception as e:
+        return False, str(e)
+
+
+def export_query_full(server, database, query, temp_dir, filename_prefix=""):
+    """Execute query and stream all rows to one CSV. No row limit."""
+    prefix = (filename_prefix or "").strip()
+    if prefix and not prefix.endswith("_"):
+        prefix = prefix + "_"
+    try:
+        import pyodbc
+        conn = pyodbc.connect(_conn_str(server, database))
+        wrapped = f"SELECT * FROM ({query.strip().rstrip(';')}) AS t"
+        cur = conn.execute(wrapped)
+        fpath = os.path.join(temp_dir, f"{prefix}query_result.csv")
+        with open(fpath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([d[0] for d in cur.description])
+            while True:
+                rows = cur.fetchmany(_CHUNK_SIZE)
+                if not rows:
+                    break
+                writer.writerows(rows)
+        conn.close()
+        return True, [{"name": os.path.basename(fpath), "path": fpath}]
+    except Exception as e:
+        return False, str(e)
+
+
+def export_sql_into_dir_full(server, database, export_mode, tables_or_query, temp_dir):
+    """
+    Export SQL tables or query into existing temp_dir with sql_ prefix; full data, no row limit.
+    Returns (True, None) or (False, error_message).
+    """
+    if export_mode == "tables":
+        if not tables_or_query:
+            return False, "No tables selected"
+        ok, _ = export_tables_full(
+            server, database, tables_or_query, temp_dir, filename_prefix="sql"
+        )
+    else:
+        query = (tables_or_query or "").strip()
+        if not query:
+            return False, "Query is empty"
+        ok, _ = export_query_full(
+            server, database, query, temp_dir, filename_prefix="sql"
+        )
+    if not ok:
+        return False, _
+    return True, None
