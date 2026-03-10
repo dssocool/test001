@@ -36,10 +36,15 @@
     <ul class="domain-card-flows">
       {% for flow in domain.flows %}
       <li class="domain-card-flow-item">
-        <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="domain-card-flow-link">
+        <div class="domain-card-flow-row">
           <span class="domain-card-flow-name">{{ flow.name or 'Flow #' ~ flow.id }}</span>
-          <span class="domain-card-flow-arrow" aria-hidden="true">→</span>
-        </a>
+          <div class="domain-card-flow-actions">
+            <a href="{{ url_for('flows_bp.edit', domain_id=domain.id, flow_id=flow.id) }}" class="btn btn-small btn-secondary">Edit</a>
+            <form method="post" action="{{ url_for('flows_bp.delete_flow_route', domain_id=domain.id, flow_id=flow.id) }}" class="domain-card-flow-delete-form" onsubmit="return confirm('Delete this data flow?');">
+              <button type="submit" class="btn btn-small domain-card-flow-delete-btn">Delete</button>
+            </form>
+          </div>
+        </div>
       </li>
       {% else %}
       <li class="domain-card-flow-empty"><em>No data flows yet.</em></li>
@@ -47,10 +52,6 @@
     </ul>
     <div class="domain-card-footer">
       <a href="{{ url_for('flows_bp.new', domain_id=domain.id) }}" class="btn btn-create-flow">Create New Data Flow</a>
-      <span class="domain-status">
-        <span class="domain-status-dot"></span>
-        <span>Status</span>
-      </span>
     </div>
   </article>
   {% endfor %}
