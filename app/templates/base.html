@@ -29,7 +29,18 @@
             </nav>
         </aside>
         <main class="main">
-            {% block content %}{% endblock %}
+            <header class="main-header">
+                <span class="main-header-spacer"></span>
+                <div class="user-menu">
+                    {% if user %}
+                    <span class="user-name" title="{{ user.preferred_username|default(user.name)|e }}">{{ user.name|default(user.preferred_username)|e }}</span>
+                    <a href="{{ url_for('auth_bp.logout') }}" class="user-logout">Logout</a>
+                    {% else %}
+                    <span class="user-name user-name-local">Local</span>
+                    {% endif %}
+                </div>
+            </header>
+            <div class="main-content-wrap">{% block content %}{% endblock %}</div>
         </main>
     </div>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

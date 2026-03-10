@@ -62,13 +62,25 @@ def init_db(app):
         if "data_generation_key" not in columns:
             db.execute("ALTER TABLE domain ADD COLUMN data_generation_key TEXT DEFAULT ''")
             db.commit()
+        cur = db.execute("PRAGMA table_info(domain)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "user_oid" not in columns:
+            db.execute("ALTER TABLE domain ADD COLUMN user_oid TEXT DEFAULT NULL")
+            db.commit()
 
 
-def get_domains_with_flows(app):
+def get_domains_with_flows(app, user_oid=None):
+    """Return domains (and their flows) for the given user. When user_oid is None, only domains with user_oid IS NULL."""
     db = get_db(app)
-    cur = db.execute(
-        "SELECT id, name, description, data_generation_key, created_at FROM domain ORDER BY name"
-    )
+    if user_oid is None:
+        cur = db.execute(
+            "SELECT id, name, description, data_generation_key, created_at, user_oid FROM domain WHERE user_oid IS NULL ORDER BY name"
+        )
+    else:
+        cur = db.execute(
+            "SELECT id, name, description, data_generation_key, created_at, user_oid FROM domain WHERE user_oid = ? ORDER BY name",
+            (user_oid,),
+        )
     domains = [dict(row) for row in cur.fetchall()]
     for d in domains:
         cur = db.execute(
@@ -82,13 +94,13 @@ def get_domains_with_flows(app):
     return domains
 
 
-def create_domain(app, name, description="", data_generation_key=None):
+def create_domain(app, name, description="", data_generation_key=None, user_oid=None):
     key = (data_generation_key if data_generation_key is not None else "") or ""
     key = key.strip() if isinstance(key, str) else ""
     with db_connection(app) as db:
         cur = db.execute(
-            "INSERT INTO domain (name, description, data_generation_key) VALUES (?, ?, ?)",
-            (name, (description or "").strip(), key),
+            "INSERT INTO domain (name, description, data_generation_key, user_oid) VALUES (?, ?, ?, ?)",
+            (name, (description or "").strip(), key, user_oid),
         )
         return cur.lastrowid
 
@@ -102,12 +114,19 @@ def create_flow(app, domain_id, name, config):
         return cur.lastrowid
 
 
-def get_domain(app, domain_id):
+def get_domain(app, domain_id, user_oid=None):
+    """Return domain if it exists and belongs to user_oid (None means domain must have user_oid IS NULL)."""
     db = get_db(app)
-    cur = db.execute(
-        "SELECT id, name, description, data_generation_key, created_at FROM domain WHERE id = ?",
-        (domain_id,),
-    )
+    if user_oid is None:
+        cur = db.execute(
+            "SELECT id, name, description, data_generation_key, created_at, user_oid FROM domain WHERE id = ? AND user_oid IS NULL",
+            (domain_id,),
+        )
+    else:
+        cur = db.execute(
+            "SELECT id, name, description, data_generation_key, created_at, user_oid FROM domain WHERE id = ? AND user_oid = ?",
+            (domain_id, user_oid),
+        )
     row = cur.fetchone()
     return dict(row) if row else None
 
@@ -118,19 +137,28 @@ def get_flow_count(app, domain_id):
     return cur.fetchone()[0] or 0
 
 
-def update_domain(app, domain_id, name, description="", data_generation_key=None):
+def update_domain(app, domain_id, name, description="", data_generation_key=None, user_oid=None):
     key = (data_generation_key if data_generation_key is not None else "") or ""
     key = key.strip() if isinstance(key, str) else ""
     with db_connection(app) as db:
-        db.execute(
-            "UPDATE domain SET name = ?, description = ?, data_generation_key = ? WHERE id = ?",
-            (name, (description or "").strip(), key, domain_id),
-        )
+        if user_oid is None:
+            db.execute(
+                "UPDATE domain SET name = ?, description = ?, data_generation_key = ? WHERE id = ? AND user_oid IS NULL",
+                (name, (description or "").strip(), key, domain_id),
+            )
+        else:
+            db.execute(
+                "UPDATE domain SET name = ?, description = ?, data_generation_key = ? WHERE id = ? AND user_oid = ?",
+                (name, (description or "").strip(), key, domain_id, user_oid),
+            )
 
 
-def delete_domain(app, domain_id):
+def delete_domain(app, domain_id, user_oid=None):
     with db_connection(app) as db:
-        db.execute("DELETE FROM domain WHERE id = ?", (domain_id,))
+        if user_oid is None:
+            db.execute("DELETE FROM domain WHERE id = ? AND user_oid IS NULL", (domain_id,))
+        else:
+            db.execute("DELETE FROM domain WHERE id = ? AND user_oid = ?", (domain_id, user_oid))
 
 
 def get_flow(app, flow_id):

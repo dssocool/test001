@@ -22,7 +22,7 @@ def create_app(config_overrides=None):
     from app.models import init_db
     init_db(app)
 
-    # Azure auth: MSAL in-app flow, or Easy Auth (platform) without MSAL
+    # Azure auth: MSAL in-app flow, or Easy Auth (platform) without MSAL; local: minimal auth so header links work
     if app.config.get("IS_AZURE"):
         if app.config.get("MSAL_CLIENT_ID"):
             from app.auth import init_auth
@@ -30,6 +30,9 @@ def create_app(config_overrides=None):
         else:
             from app.auth import init_easy_auth
             init_easy_auth(app)
+    else:
+        from app.auth import init_minimal_auth
+        init_minimal_auth(app)
 
     from app.routes.main import main_bp
     from app.routes.domains import domains_bp
@@ -50,5 +53,10 @@ def create_app(config_overrides=None):
     app.register_blueprint(local_bp, url_prefix="/api/local")
     app.register_blueprint(dry_run_bp, url_prefix="/api/dry-run")
     app.register_blueprint(delphix_bp, url_prefix="/api/delphix")
+
+    @app.context_processor
+    def inject_user():
+        from flask import session
+        return {"user": session.get("user")}
 
     return app

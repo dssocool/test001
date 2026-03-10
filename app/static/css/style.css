@@ -11,7 +11,16 @@ body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f
 .sidebar-nav-item:hover { background: #dadce0; color: #202124; }
 .sidebar-nav-item.active { background: #d2e3fc; color: #1a73e8; }
 .sidebar-nav-icon { width: 20px; height: 20px; flex-shrink: 0; }
-.main { flex: 1; min-width: 0; padding: 1.5rem 2rem; background: #fff; }
+.main { flex: 1; min-width: 0; padding: 0; background: #fff; display: flex; flex-direction: column; }
+.main-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 0.75rem 1.5rem 0.75rem 2rem; border-bottom: 1px solid #eee; background: #fafafa; }
+.main-header-spacer { flex: 1; }
+.user-menu { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
+.user-name { color: #202124; font-weight: 500; }
+.user-name-local { color: #5f6368; font-weight: 400; }
+.user-logout { color: #1a73e8; text-decoration: none; }
+.user-logout:hover { text-decoration: underline; }
+.main > .main-content-wrap > .domains-header { margin-top: 0; }
+.main-content-wrap { flex: 1; min-width: 0; padding: 1.5rem 2rem; }
 .main .flow-page { max-width: none; }
 
 /* Domains page: header */

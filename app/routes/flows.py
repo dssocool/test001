@@ -4,6 +4,7 @@ import os
 import uuid
 from flask import Blueprint, render_template, request, redirect, url_for, current_app, session, jsonify
 
+from app.auth import current_user_oid
 from app.models import get_domain, get_flow, get_flow_count, create_flow, update_flow, delete_flow
 from app.services.delphix_flow import run_delphix_flow
 from app.services.flow_config_persist import persist_flow_config
@@ -15,7 +16,7 @@ SESSION_TEMP_DIR = "flow_temp_dir"
 
 def _render_flow_step1(app, domain_id, flow_config, temp_dir, delphix_error=None, edit_flow_id=None, flow=None):
     """Re-render step 1 (e.g. when Delphix fails)."""
-    domain = get_domain(app, domain_id)
+    domain = get_domain(app, domain_id, user_oid=current_user_oid())
     if not domain:
         return "Domain not found", 404
     default_flow_name = "Flow {}".format(get_flow_count(app, domain_id) + 1)
@@ -107,7 +108,7 @@ def _handle_step1_local_upload(domain_id):
 @flows_bp.route("/upload-local", methods=["POST"])
 def upload_local(domain_id):
     """Upload a local file (Local file source tab); sets session and returns JSON. Does not redirect."""
-    domain = get_domain(current_app, domain_id)
+    domain = get_domain(current_app, domain_id, user_oid=current_user_oid())
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     if not _handle_step1_local_upload(domain_id):
@@ -133,7 +134,7 @@ def upload_local(domain_id):
 @flows_bp.route("/update-local-config", methods=["POST"])
 def update_local_config(domain_id):
     """Update local file config (file_type, delimiter, etc.) in session. Used when user adjusts file type after upload."""
-    domain = get_domain(current_app, domain_id)
+    domain = get_domain(current_app, domain_id, user_oid=current_user_oid())
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
@@ -171,7 +172,7 @@ def update_local_config(domain_id):
 def run_dry_run(domain_id):
     """Run Delphix synthetic data generation; called from step 2 when user clicks Dry Run.
     Supports multi-source: SQL + Blob + Local aggregated into one temp_dir with prefixed CSV names."""
-    domain = get_domain(current_app, domain_id)
+    domain = get_domain(current_app, domain_id, user_oid=current_user_oid())
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
@@ -275,7 +276,7 @@ def run_dry_run(domain_id):
 
 @flows_bp.route("/new", methods=["GET", "POST"])
 def new(domain_id):
-    domain = get_domain(current_app, domain_id)
+    domain = get_domain(current_app, domain_id, user_oid=current_user_oid())
     if not domain:
         return "Domain not found", 404
 
@@ -369,7 +370,7 @@ def new(domain_id):
 
 @flows_bp.route("/<int:flow_id>/edit", methods=["GET", "POST"])
 def edit(domain_id, flow_id):
-    domain = get_domain(current_app, domain_id)
+    domain = get_domain(current_app, domain_id, user_oid=current_user_oid())
     if not domain:
         return "Domain not found", 404
     flow = get_flow(current_app, flow_id)
@@ -458,7 +459,7 @@ def edit(domain_id, flow_id):
 
 @flows_bp.route("/<int:flow_id>/delete", methods=["POST"])
 def delete_flow_route(domain_id, flow_id):
-    domain = get_domain(current_app, domain_id)
+    domain = get_domain(current_app, domain_id, user_oid=current_user_oid())
     if domain:
         flow = get_flow(current_app, flow_id)
         if flow and flow["domain_id"] == domain_id:

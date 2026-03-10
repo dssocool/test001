@@ -12,6 +12,11 @@ import uuid
 from flask import redirect, url_for, session, request, current_app
 
 
+def current_user_oid():
+    """Stable user id for scoping data (session['user']['oid']). None when not authenticated."""
+    return (session.get("user") or {}).get("oid")
+
+
 def _msal_app():
     import msal
     cfg = current_app.config
@@ -120,6 +125,25 @@ def easy_auth_login_redirect_url(app):
     provider = (app.config.get("EASY_AUTH_PROVIDER") or "aad").strip().lower()
     # Azure Easy Auth segment matches portal IdP id (github, aad, ...)
     return "/.auth/login/" + provider
+
+
+def init_minimal_auth(app):
+    """Register auth_bp with /login and /logout only (for local dev so base template url_for works)."""
+    from flask import Blueprint
+
+    auth_bp = Blueprint("auth_bp", __name__)
+
+    @auth_bp.route("/login")
+    def login():
+        return redirect(url_for("main_bp.index"))
+
+    @auth_bp.route("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for("main_bp.index"))
+
+    app.register_blueprint(auth_bp)
+    return auth_bp
 
 
 def init_easy_auth(app):
