@@ -53,8 +53,10 @@ To hide the console window, set `console=False` in the `.spec` file under `EXE(.
    - `RUNNING_ON_AZURE` = `1` (or rely on default `WEBSITE_SITE_NAME`)
    - `SECRET_KEY` = random secret for Flask session
    - **Option A – Easy Auth only (recommended if you use App Service Authentication):**  
-     Enable **Authentication** in the portal (Microsoft identity platform). No MSAL env vars needed.  
-     The app reads `X-MS-CLIENT-PRINCIPAL` and `/logout` redirects to `/.auth/logout`.
+     Enable **Authentication** in the portal and pick an identity provider (Microsoft, **GitHub**, Google, etc.). No MSAL env vars needed.  
+     The app reads `X-MS-CLIENT-PRINCIPAL` and `/logout` redirects to `/.auth/logout`.  
+     Set **`EASY_AUTH_PROVIDER`** to match the portal IdP so `/login` redirects correctly, e.g. `github` → `/.auth/login/github`, `aad` → `/.auth/login/aad`.  
+     Or set **`EASY_AUTH_LOGIN_PATH`** to the full path if you use a custom route.
    - **Option B – MSAL in the app:**  
      `MSAL_CLIENT_ID`, `MSAL_CLIENT_SECRET`, `MSAL_TENANT_ID` — app handles `/login` and `/redirect` itself.
 3. **Azure AD (only if using MSAL in app)**:
@@ -77,6 +79,8 @@ With **MSAL**, the app redirects to `/login` and Azure AD as before.
 | `INSTANCE_PATH` | Folder for SQLite DB and temp files (default: `instance` next to exe or project). |
 | `TEMP_BASE` | Base folder for dry-run temp files (default: `instance/temp`). |
 | `SECRET_KEY` | Flask secret key (required for session on Azure). |
+| `EASY_AUTH_PROVIDER` | Easy Auth IdP segment: `aad` (default), `github`, `google`, `twitter`, … → `/.auth/login/{provider}`. |
+| `EASY_AUTH_LOGIN_PATH` | Optional full login path override (e.g. `/.auth/login/github`). If set, overrides `EASY_AUTH_PROVIDER`. |
 
 ### Delphix via Azure Storage Queue (App Service without Delphix network)
 

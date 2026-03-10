@@ -15,8 +15,11 @@ class Config:
         MSAL_TENANT_ID = os.environ.get("MSAL_TENANT_ID", "common")
         # Redirect URI for Azure AD (e.g. https://<your-app>.azurewebsites.net/redirect)
         MSAL_REDIRECT_PATH = "/redirect"
-        # Easy Auth platform login path (Entra ID default; override if using another provider)
-        EASY_AUTH_LOGIN_PATH = os.environ.get("EASY_AUTH_LOGIN_PATH", "/.auth/login/aad")
+        # Easy Auth: identity provider segment for /.auth/login/{provider}
+        # Examples: aad (Microsoft), github, google, twitter. Override full path with EASY_AUTH_LOGIN_PATH.
+        EASY_AUTH_PROVIDER = (os.environ.get("EASY_AUTH_PROVIDER") or "aad").strip().lower()
+        # If set, used as-is for /login redirect; else built from EASY_AUTH_PROVIDER
+        EASY_AUTH_LOGIN_PATH = os.environ.get("EASY_AUTH_LOGIN_PATH", "").strip() or None
         SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
     else:
         HOST = "127.0.0.1"

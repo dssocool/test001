@@ -38,9 +38,19 @@ def _principal_claims_dict(principal_json):
     return out
 
 
+def _claim(claims, *keys):
+    """First non-empty claim value for any of keys (GitHub/AAD use different typ names)."""
+    for k in keys:
+        v = claims.get(k)
+        if v is not None and str(v).strip() != "":
+            return v
+    return None
+
+
 def _session_user_from_easy_auth():
     """
     Populate session['user'] from App Service Easy Auth headers.
+    Works with Microsoft (aad), GitHub, and other providers; claim typ names vary by IdP.
     Returns True if user was set from headers.
     """
     # Optional short-circuit headers (when platform forwards them)
@@ -56,19 +66,30 @@ def _session_user_from_easy_auth():
             principal = None
         if isinstance(principal, dict):
             claims = _principal_claims_dict(principal)
-            # Common claim type URIs and short names
-            oid = (
-                claims.get("oid")
-                or claims.get("http://schemas.microsoft.com/identity/claims/objectidentifier")
-                or principal_id
-            )
-            preferred_username = (
-                claims.get("preferred_username")
-                or claims.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn")
-                or claims.get("email")
+            # Stable user id: AAD oid / objectidentifier; GitHub often sub or nameidentifier
+            oid = _claim(
+                claims,
+                "oid",
+                "http://schemas.microsoft.com/identity/claims/objectidentifier",
+                "sub",
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
+                "user_id",
+            ) or principal_id
+            # Login / UPN / email
+            preferred_username = _claim(
+                claims,
+                "preferred_username",
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn",
+                "login",  # GitHub login
+                "username",
+                "email",
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+            ) or principal_name
+            name = (
+                _claim(claims, "name", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
+                or preferred_username
                 or principal_name
             )
-            name = claims.get("name") or preferred_username or principal_name
             session["user"] = {
                 "oid": oid,
                 "preferred_username": preferred_username,
@@ -88,10 +109,24 @@ def _session_user_from_easy_auth():
     return False
 
 
+def easy_auth_login_redirect_url(app):
+    """
+    Platform login URL: EASY_AUTH_LOGIN_PATH if set, else /.auth/login/{EASY_AUTH_PROVIDER}.
+    Provider examples: aad, github, google, twitter.
+    """
+    path = app.config.get("EASY_AUTH_LOGIN_PATH")
+    if path:
+        return path if path.startswith("/") else "/" + path
+    provider = (app.config.get("EASY_AUTH_PROVIDER") or "aad").strip().lower()
+    # Azure Easy Auth segment matches portal IdP id (github, aad, ...)
+    return "/.auth/login/" + provider
+
+
 def init_easy_auth(app):
     """
     Easy Auth only: sync session from platform headers; logout goes to /.auth/logout.
     Call when IS_AZURE and MSAL is not configured.
+    Login redirect uses EASY_AUTH_PROVIDER or EASY_AUTH_LOGIN_PATH.
     """
     from flask import Blueprint
 
@@ -99,9 +134,7 @@ def init_easy_auth(app):
 
     @auth_bp.route("/login")
     def login():
-        # Delegate to platform login (path configurable; default Entra ID)
-        path = app.config.get("EASY_AUTH_LOGIN_PATH") or "/.auth/login/aad"
-        return redirect(path)
+        return redirect(easy_auth_login_redirect_url(app))
 
     @auth_bp.route("/logout")
     def logout():
