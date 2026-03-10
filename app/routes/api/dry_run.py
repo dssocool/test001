@@ -27,6 +27,34 @@ def files():
     elif max_rows > 10:
         max_rows = 10
     result = []
+
+    # Prefer pre-mask snapshots written by run_delphix_flow so "original" columns stay true originals
+    originals_dir = os.path.join(temp_dir, ".dry_run_originals")
+    if os.path.isdir(originals_dir):
+        for name in sorted(os.listdir(originals_dir)):
+            path = os.path.join(originals_dir, name)
+            if not os.path.isfile(path):
+                continue
+            if not name.lower().endswith(".csv"):
+                continue
+            # Display name without index prefix (000_) used only for sort order vs blob_names
+            display_name = name
+            if len(name) > 4 and name[:3].isdigit() and name[3] == "_":
+                display_name = name[4:]
+            rows = []
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fp:
+                    reader = csv.reader(fp)
+                    for i, row in enumerate(reader):
+                        if i > max_rows:
+                            break
+                        rows.append(row)
+            except Exception as e:
+                rows = [["Error reading file: " + str(e)]]
+            result.append({"name": display_name, "path": path, "rows": rows})
+        return jsonify({"ok": True, "files": result})
+
+    # Legacy: no snapshot yet — read from temp_dir as before
     for name in sorted(os.listdir(temp_dir)):
         path = os.path.join(temp_dir, name)
         if not os.path.isfile(path):

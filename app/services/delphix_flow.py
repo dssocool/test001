@@ -7,6 +7,7 @@ and returns all IDs to store in flow config.
 import csv
 import os
 import re
+import shutil
 import time
 import uuid
 
@@ -131,6 +132,21 @@ def run_delphix_flow(temp_dir, flow_config, instance_path, data_generation_key=N
             return False, "Delphix file ruleset response missing id"
     except DelphixClientError as e:
         return False, f"Delphix file ruleset: {e}"
+
+    # 3b) Snapshot data CSVs before upload/masking so dry-run UI can show true originals
+    # (Delphix may overwrite blobs in place; temp_dir on disk may also drift—snapshots are immutable.)
+    originals_dir = os.path.join(temp_dir, ".dry_run_originals")
+    try:
+        if os.path.isdir(originals_dir):
+            shutil.rmtree(originals_dir)
+        os.makedirs(originals_dir, exist_ok=True)
+        # Prefix with index so list order matches csv_files / blob_names order for UI pairing.
+        for idx, (name, data_path) in enumerate(csv_files):
+            dest_name = f"{idx:03d}_{name}"
+            dest_path = os.path.join(originals_dir, dest_name)
+            shutil.copy2(data_path, dest_path)
+    except Exception as e:
+        return False, f"Could not snapshot originals: {e}"
 
     # 4) Upload each data file to Azure Blob
     azure = config["azure"]
