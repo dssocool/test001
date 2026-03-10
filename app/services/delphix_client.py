@@ -17,10 +17,38 @@ disable_warnings(InsecureRequestWarning)
 DELPHIX_CONFIG_FILENAME = "delphix_config.json"
 
 
+def use_delphix_queue_proxy():
+    """True when env requests queue proxy (caller must also validate azure_queue in config)."""
+    return os.environ.get("DELPHIX_QUEUE_PROXY", "").lower() in ("1", "true", "yes")
+
+
+def azure_queue_config_valid(data):
+    """
+    Return True if data.azure_queue has enough to send/receive RPCs.
+    Expected: request_queue, response_queue, and connection_string or account_name+account_key.
+    """
+    if not isinstance(data, dict):
+        return False
+    aq = data.get("azure_queue")
+    if not isinstance(aq, dict):
+        return False
+    if not aq.get("request_queue") or not aq.get("response_queue"):
+        return False
+    if aq.get("connection_string"):
+        return True
+    if aq.get("account_name") and aq.get("account_key"):
+        return True
+    return False
+
+
 def load_delphix_config(instance_path):
     """
     Load Delphix config from instance_path/delphix_config.json.
-    Returns dict with base_url, auth_token, file_connector_id, profile_set_id, azure.
+    Returns dict with base_url, auth_token, file_connector_id, profile_set_id, azure,
+    and optionally azure_queue.
+
+    When DELPHIX_QUEUE_PROXY is set and azure_queue is valid, base_url and auth_token
+    are optional on the server (local bridge uses full config with Delphix reachable).
     Returns None if file is missing or invalid.
     """
     path = os.path.join(instance_path, DELPHIX_CONFIG_FILENAME)
@@ -33,14 +61,36 @@ def load_delphix_config(instance_path):
         return None
     if not isinstance(data, dict):
         return None
-    required = ("base_url", "auth_token", "file_connector_id", "profile_set_id", "azure")
+
     azure_required = ("account_name", "container_name", "access_key")
-    if not all(data.get(k) for k in required):
-        return None
     azure = data.get("azure")
     if not isinstance(azure, dict) or not all(azure.get(k) for k in azure_required):
         return None
+
+    # Queue proxy mode: App Service has blob + queue; Delphix API runs on local bridge
+    if use_delphix_queue_proxy() and azure_queue_config_valid(data):
+        if not data.get("file_connector_id") or not data.get("profile_set_id"):
+            return None
+        data = dict(data)
+        data["azure_queue"] = data.get("azure_queue")  # ensure present
+        return data
+
+    # Direct Delphix: require full credentials
+    required = ("base_url", "auth_token", "file_connector_id", "profile_set_id")
+    if not all(data.get(k) for k in required):
+        return None
     return data
+
+
+def get_delphix_client(config):
+    """
+    Return DelphixClient or DelphixClientViaQueue based on DELPHIX_QUEUE_PROXY and azure_queue.
+    """
+    from app.services.delphix_queue_rpc import DelphixClientViaQueue
+
+    if use_delphix_queue_proxy() and azure_queue_config_valid(config):
+        return DelphixClientViaQueue(config)
+    return DelphixClient(config)
 
 
 class DelphixClientError(Exception):

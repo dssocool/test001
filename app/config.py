@@ -35,3 +35,6 @@ class Config:
 
     # Temp folder for flow dry runs
     TEMP_BASE = os.environ.get("TEMP_BASE", os.path.join(INSTANCE_PATH, "temp"))
+
+    # When true and delphix_config has azure_queue, Delphix API calls go via Azure Queue to a local bridge
+    DELPHIX_QUEUE_PROXY = os.environ.get("DELPHIX_QUEUE_PROXY", "").lower() in ("1", "true", "yes")

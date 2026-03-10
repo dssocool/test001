@@ -13,7 +13,7 @@ import uuid
 
 from app.services.azure_blob import upload_file
 from app.services.data_generation_key import masking_rounds_from_key
-from app.services.delphix_client import DelphixClient, DelphixClientError, load_delphix_config
+from app.services.delphix_client import DelphixClientError, get_delphix_client, load_delphix_config
 
 # Temp header files created for Delphix file format have names like {base}_{8 hex}.csv
 _HEADER_FILE_PATTERN = re.compile(r"^.*_[0-9a-f]{8}\.csv$", re.IGNORECASE)
@@ -97,7 +97,7 @@ def run_delphix_flow(temp_dir, flow_config, instance_path, data_generation_key=N
         return False, "Delphix not configured. Add instance/delphix_config.json (see delphix_config.example.json)."
 
     try:
-        client = DelphixClient(config)
+        client = get_delphix_client(config)
     except Exception as e:
         return False, f"Delphix config invalid: {e}"
 

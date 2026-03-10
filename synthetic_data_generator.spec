@@ -24,6 +24,7 @@ a = Analysis(
         'jinja2',
         'pyodbc',
         'azure.storage.blob',
+        'azure.storage.queue',
         'msal',
     ],
     hookspath=[],

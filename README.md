@@ -75,6 +75,28 @@ Users will be redirected to Azure AD login when they open the app.
 | `TEMP_BASE` | Base folder for dry-run temp files (default: `instance/temp`). |
 | `SECRET_KEY` | Flask secret key (required for session on Azure). |
 
+### Delphix via Azure Storage Queue (App Service without Delphix network)
+
+When the web app runs in Azure App Service but **cannot reach Delphix** directly, you can tunnel Delphix API calls through Azure Storage Queues. A **local bridge** process (on a machine with Delphix access) consumes requests and runs the real `DelphixClient`.
+
+1. **Create two queues** in a storage account (e.g. `delphix-requests`, `delphix-responses`).
+2. **`delphix_config.json`** (in `INSTANCE_PATH`):
+   - Always include **`azure`** (blob) so the app can upload/download CSVs.
+   - Add **`azure_queue`** with `request_queue`, `response_queue`, and either `connection_string` or `account_name` + `account_key`.
+   - On **App Service only**, you may omit `base_url` and `auth_token` if you enable the queue proxy (bridge holds full credentials).
+3. **App Service**:
+   - Set `USE_DELPHIX_QUEUE_TUNNEL=1` or `DELPHIX_QUEUE_PROXY=1`, or set `USE_DELPHIX_QUEUE_TUNNEL = True` in `run_azure.py`.
+   - Use a long enough **request timeout** for the dry-run POST (profile/masking can run many minutes).
+4. **Local bridge** (PC with Delphix access):
+
+   ```bash
+   unset DELPHIX_QUEUE_PROXY
+   export INSTANCE_PATH=/path/to/instance   # contains delphix_config.json with base_url + auth_token + azure_queue
+   python scripts/delphix_queue_bridge.py
+   ```
+
+   The bridge must use a **full** config (including `base_url` and `auth_token`). See [delphix_config.example.json](delphix_config.example.json) for the `azure_queue` shape.
+
 ## Data sources
 
 - **SQL Server**: Server + database; auth = Active Directory Integrated; TrustServerCertificate=yes. Export multiple tables (top 10 rows each) or run a query (top 10 rows).

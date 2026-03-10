@@ -1,7 +1,7 @@
 """API for Delphix execution status (used on Test & Dry Run step)."""
 from flask import Blueprint, request, jsonify, current_app
 
-from app.services.delphix_client import DelphixClient, DelphixClientError, load_delphix_config
+from app.services.delphix_client import DelphixClientError, get_delphix_client, load_delphix_config
 
 delphix_bp = Blueprint("delphix_bp", __name__)
 
@@ -24,7 +24,7 @@ def status():
         return jsonify({"ok": False, "error": "Delphix not configured"}), 400
 
     try:
-        client = DelphixClient(config)
+        client = get_delphix_client(config)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -63,7 +63,7 @@ def file_field_metadata():
     if not config:
         return jsonify({"ok": False, "error": "Delphix not configured"}), 400
     try:
-        client = DelphixClient(config)
+        client = get_delphix_client(config)
         data = client.get_file_field_metadata(file_format_id, page_number=1)
     except DelphixClientError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
