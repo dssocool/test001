@@ -129,17 +129,66 @@ form textarea { min-height: 100px; }
 .step-hint { font-size: 0.9rem; color: #6c757d; margin-top: 0.5rem; }
 .local-uploaded-hint { margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: #e8f5e9; border-radius: 4px; font-size: 0.9rem; color: #2e7d32; }
 .flow-step-wrapper { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }
+.flow-step-wrapper.step1-flow-wrapper { display: flex; flex-direction: column; min-height: calc(100vh - 9rem); }
+.flow-step-wrapper.step1-flow-wrapper .step1-content { flex: 1; min-height: 0; }
 .flow-step-wrapper .step-content { border: none; border-radius: 0; box-shadow: none; margin: 0; }
 
-/* Step 1: constrain to viewport height so no page-level scroll */
-.flow-step-wrapper .step-content.step-content-active.step1-content { display: flex; flex-direction: column; overflow: hidden; max-height: calc(100vh - 12rem); }
-.flow-step-wrapper .step1-content .step1-layout { flex: 1; min-height: 0; overflow: hidden; }
+/* Step 1: flex column fills viewport; connection-parameters scrolls; actions always visible */
+.flow-step-wrapper .step-content.step-content-active.step1-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: calc(100vh - 10rem);
+  max-height: calc(100vh - 8rem);
+}
+.flow-step-wrapper .step1-content .step1-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-/* Step 1: single panel, three source tabs (SQL / Blob / Local) */
-.step1-layout { display: block; min-height: min(60vh, 420px); }
-.step1-source-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.step1-source-panel form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.step1-card-scroll { flex: 1; min-height: 0; overflow-y: auto; margin-bottom: 1rem; -webkit-overflow-scrolling: touch; }
+/* Step 1: single panel fills available height */
+.step1-layout { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.step1-source-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.step1-source-panel form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+/* Scroll area: title + tabs fixed; panels viewport takes rest; params scroll inside */
+.step1-card-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+.step1-card-scroll .defined-sources-title,
+.step1-card-scroll .source-tabs-row {
+  flex-shrink: 0;
+}
+.step1-panels-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 .step1-warning-banner { margin: 0 0 1rem; padding: 0.75rem 1rem; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; color: #92400e; font-size: 0.95rem; }
 @keyframes step1-banner-shake {
   0%, 100% { transform: translateX(0); }
@@ -179,16 +228,48 @@ form textarea { min-height: 100px; }
 .source-tab-item.active .source-option-icon-local { color: #1a73e8; }
 .source-option-label { font-weight: 500; }
 
-.connection-parameters { background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-.connection-parameters-title { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; color: #374151; }
-.connection-parameters .field-row { margin-bottom: 1rem; }
-.connection-parameters .field-group { margin-bottom: 0.75rem; }
-.connection-parameters .validate-btn-wrap { margin-top: 0.5rem; }
+/* Connection parameters: only this region scrolls when zoomed in; shrinks with viewport */
+.connection-parameters {
+  background: #f8f9fa;
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.connection-parameters-title { margin: 0 0 0.75rem; font-size: 1rem; font-weight: 600; color: #374151; flex-shrink: 0; }
+.connection-parameters .field-row { margin-bottom: 0.75rem; }
+.connection-parameters .field-group { margin-bottom: 0.5rem; }
+.connection-parameters .validate-btn-wrap { margin-top: 0.5rem; flex-shrink: 0; }
 
-.source-panel { display: none; }
-.source-panel.active { display: block; }
-.source-panel .field-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
-.source-panel .field-group { flex: 1; min-width: 200px; }
+.source-panel { display: none !important; }
+.source-panel.active {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Wide: fields in a row; narrow: wrap + stack; always inside scrollable connection-parameters */
+.source-panel .field-row {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.source-panel .field-group {
+  flex: 1 1 auto;
+  min-width: min(100%, 12rem);
+}
+@media (min-width: 900px) {
+  .source-panel .field-row { flex-wrap: nowrap; }
+  .source-panel .field-group { min-width: 0; }
+}
 .source-panel .field-group label { display: block; font-size: 0.9rem; font-weight: 500; color: #374151; margin-bottom: 0.35rem; }
 .source-panel .field-group input,
 .source-panel .field-group select { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; }
@@ -198,8 +279,21 @@ form textarea { min-height: 100px; }
 .source-panel .field-group-checkbox .checkbox-wrap { display: flex; align-items: center; min-height: 2.25rem; }
 .source-panel .field-group-checkbox .checkbox-wrap input { margin-right: 0.35rem; }
 .source-panel .validate-btn-wrap { flex-shrink: 0; }
-.flow-form-actions { margin-top: 0; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
-.step1-actions { margin-top: auto; }
+.flow-form-actions {
+  margin-top: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
+  background: #fff;
+}
+.step1-actions {
+  flex-shrink: 0;
+  margin-top: 0;
+}
 .dry-run-local-placeholder { padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6; }
 
 .dry-run-section { margin-bottom: 1rem; }

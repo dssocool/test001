@@ -17,7 +17,7 @@
 <h1>{% if edit_flow_id %}Edit{% else %}Create{% endif %} data flow</h1>
 <p class="domain-badge">Domain: <strong>{{ domain.name }}</strong></p>
 
-<div class="flow-step-wrapper">
+<div class="flow-step-wrapper{% if step == 1 %} step1-flow-wrapper{% endif %}">
 <div class="flow-steps">
   <div class="flow-step {% if step == 1 %}step-current{% elif step > 1 %}step-done{% endif %}">
     <div class="flow-step-inner">
@@ -82,6 +82,7 @@
           </label>
         </div>
 
+        <div class="step1-panels-viewport">
         <div id="panel-sql" class="source-panel {% if flow_config.source_type not in ('blob', 'local') %}active{% endif %}">
           <div class="connection-parameters">
             <h3 class="connection-parameters-title">Connection parameters</h3>
@@ -174,6 +175,7 @@
             </div>
           </div>
         </div>
+        </div><!-- .step1-panels-viewport -->
       </div>
       <div class="flow-form-actions step1-actions">
         <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
