@@ -19,6 +19,48 @@ def persist_flow_config(cfg, existing=None):
     source_type = cfg.get("source_type")
     existing = existing if isinstance(existing, dict) else {}
 
+    # Multi-source: persist each block without secrets
+    if cfg.get("sql") or cfg.get("blob") or (cfg.get("local") and isinstance(cfg.get("local"), dict)):
+        out = {}
+        if isinstance(cfg.get("sql"), dict) and (cfg["sql"].get("server") or cfg["sql"].get("database")):
+            s = cfg["sql"]
+            out["sql"] = {
+                "server": (s.get("server") or "").strip(),
+                "database": (s.get("database") or "").strip(),
+                "export_mode": s.get("export_mode") or "tables",
+            }
+            if out["sql"]["export_mode"] == "tables":
+                out["sql"]["tables"] = list(s.get("tables") or [])
+                out["sql"]["query"] = ""
+            else:
+                out["sql"]["query"] = (s.get("query") or "").strip()
+                out["sql"]["tables"] = []
+            if s.get("delimiter") is not None:
+                out["sql"]["delimiter"] = s.get("delimiter")
+        if isinstance(cfg.get("blob"), dict) and cfg["blob"].get("account_name"):
+            b = cfg["blob"]
+            out["blob"] = {
+                "account_name": (b.get("account_name") or "").strip(),
+                "container": (b.get("container") or "").strip(),
+                "prefix": (b.get("prefix") or "").strip(),
+                "file_type": b.get("file_type") or "csv",
+                "delimiter": b.get("delimiter") if b.get("delimiter") is not None else ",",
+                "selected_blobs": list(b.get("selected_blobs") or []),
+            }
+        if isinstance(cfg.get("local"), dict) and cfg["local"].get("upload_name"):
+            name = cfg["local"].get("upload_name") or ""
+            if name:
+                name = os.path.basename(str(name))
+            out["local"] = {"upload_name": name}
+            if cfg["local"].get("file_type"):
+                out["local"]["file_type"] = cfg["local"]["file_type"]
+        if out:
+            out["source_type"] = "multi" if len([k for k in out if k in ("sql", "blob", "local")]) > 1 else (
+                "sql" if "sql" in out else "blob" if "blob" in out else "local"
+            )
+            _merge_preserved(out, cfg, existing)
+            return out
+
     if source_type == "sql":
         out = {
             "source_type": "sql",
@@ -52,42 +94,6 @@ def persist_flow_config(cfg, existing=None):
             "selected_blobs": list(cfg.get("selected_blobs") or []),
         }
         # Never persist account key
-        _merge_preserved(out, cfg, existing)
-        return out
-
-    if source_type == "multi":
-        out = {"source_type": "multi"}
-        if cfg.get("use_sql"):
-            out["use_sql"] = True
-            out["server"] = (cfg.get("server") or "").strip()
-            out["database"] = (cfg.get("database") or "").strip()
-            out["export_mode"] = cfg.get("export_mode") or "tables"
-            if out["export_mode"] == "tables":
-                out["tables"] = list(cfg.get("tables") or [])
-                out["query"] = ""
-            else:
-                out["query"] = (cfg.get("query") or "").strip()
-                out["tables"] = []
-        if cfg.get("use_blob"):
-            out["use_blob"] = True
-            out["account_name"] = (cfg.get("account_name") or "").strip()
-            out["container"] = (cfg.get("container") or "").strip()
-            out["prefix"] = (cfg.get("prefix") or "").strip()
-            out["file_type"] = cfg.get("file_type") or "csv"
-            out["delimiter"] = cfg.get("delimiter") if cfg.get("delimiter") is not None else ","
-            out["selected_blobs"] = list(cfg.get("selected_blobs") or [])
-        if cfg.get("use_local"):
-            out["use_local"] = True
-            name = cfg.get("upload_name") or ""
-            if name:
-                name = os.path.basename(str(name))
-            out["upload_name"] = name
-        if cfg.get("delimiter") is not None and "delimiter" not in out:
-            out["delimiter"] = cfg.get("delimiter")
-        if "has_header" in cfg:
-            out["has_header"] = cfg.get("has_header")
-        if cfg.get("end_of_record") is not None:
-            out["end_of_record"] = cfg.get("end_of_record")
         _merge_preserved(out, cfg, existing)
         return out
 

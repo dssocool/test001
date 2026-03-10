@@ -58,12 +58,33 @@
       <input type="hidden" name="temp_dir" id="step1-temp-dir">
       <div class="step1-card-scroll">
         <h2 class="defined-sources-title">Data source</h2>
-        <p class="step1-multi-hint" style="margin:0 0 1rem; font-size:0.9rem; color:#5f6368;">Enable one or more sources; dry run will merge all selected data.</p>
+        <div class="source-tabs-row" role="tablist" aria-label="Data source type">
+          <label class="source-tab-item {% if flow_config.source_type not in ('blob', 'local') %}active{% endif %}" data-source="sql" role="tab">
+            <input type="radio" name="source_type" value="sql" {% if flow_config.source_type not in ('blob', 'local') %}checked{% endif %} class="source-option-radio">
+            <span class="source-option-icon source-option-icon-sql">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            </span>
+            <span class="source-option-label">SQL Server</span>
+          </label>
+          <label class="source-tab-item {% if flow_config.source_type == 'blob' %}active{% endif %}" data-source="blob" role="tab">
+            <input type="radio" name="source_type" value="blob" {% if flow_config.source_type == 'blob' %}checked{% endif %} class="source-option-radio">
+            <span class="source-option-icon source-option-icon-blob">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+            </span>
+            <span class="source-option-label">Azure Blob Storage</span>
+          </label>
+          <label class="source-tab-item {% if flow_config.source_type == 'local' %}active{% endif %}" data-source="local" role="tab">
+            <input type="radio" name="source_type" value="local" {% if flow_config.source_type == 'local' %}checked{% endif %} class="source-option-radio">
+            <span class="source-option-icon source-option-icon-local">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            </span>
+            <span class="source-option-label">Local file</span>
+          </label>
+        </div>
 
-        <div id="panel-sql" class="source-panel source-panel-stacked active">
+        <div id="panel-sql" class="source-panel {% if flow_config.source_type not in ('blob', 'local') %}active{% endif %}">
           <div class="connection-parameters">
-            <label class="step1-include-label"><input type="checkbox" id="include-sql" {% if flow_config.get('use_sql') or flow_config.source_type in ('sql', 'multi') or (flow_config.source_type not in ('blob', 'local', 'multi') and flow_config.get('server')) %}checked{% endif %}> Include SQL Server</label>
-            <h3 class="connection-parameters-title">SQL Server</h3>
+            <h3 class="connection-parameters-title">Connection parameters</h3>
             <div class="field-row">
               <div class="field-group">
                 <label for="sql-server">Server Address</label>
@@ -85,7 +106,7 @@
               <button type="button" id="sql-validate" class="btn">Test Connection</button>
             </div>
             <span id="sql-validate-msg" class="error"></span>
-            <div id="sql-after-validate" style="display:{% if (flow_config.source_type == 'sql' or flow_config.get('use_sql') or flow_config.source_type == 'multi') and (flow_config.server or flow_config.database) %}block{% else %}none{% endif %}; margin-top:1rem;">
+            <div id="sql-after-validate" style="display:{% if flow_config.source_type == 'sql' and (flow_config.server or flow_config.database) %}block{% else %}none{% endif %}; margin-top:1rem;">
               <label><input type="radio" name="sql-mode" value="tables" {% if flow_config.get('export_mode', 'tables') != 'query' %}checked{% endif %}> By Table</label>
               <label><input type="radio" name="sql-mode" value="query" {% if flow_config.get('export_mode') == 'query' %}checked{% endif %}> By Query</label>
               <div id="sql-tables-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}none{% else %}block{% endif %};">
@@ -100,10 +121,9 @@
           </div>
         </div>
 
-        <div id="panel-blob" class="source-panel source-panel-stacked active">
+        <div id="panel-blob" class="source-panel {% if flow_config.source_type == 'blob' %}active{% endif %}">
           <div class="connection-parameters">
-            <label class="step1-include-label"><input type="checkbox" id="include-blob" {% if flow_config.get('use_blob') or flow_config.source_type in ('blob', 'multi') %}checked{% endif %}> Include Azure Blob Storage</label>
-            <h3 class="connection-parameters-title">Azure Blob Storage</h3>
+            <h3 class="connection-parameters-title">Connection parameters</h3>
             <div class="field-row">
               <div class="field-group">
                 <label for="blob-account">Account name</label>
@@ -122,7 +142,7 @@
               </div>
             </div>
             <span id="blob-validate-msg" class="error"></span>
-            <div id="blob-after-validate" style="display:{% if (flow_config.source_type == 'blob' or flow_config.get('use_blob') or flow_config.source_type == 'multi') and flow_config.get('selected_blobs') %}block{% else %}none{% endif %}; margin-top:1rem;">
+            <div id="blob-after-validate" style="display:{% if flow_config.source_type == 'blob' and flow_config.get('selected_blobs') %}block{% else %}none{% endif %}; margin-top:1rem;">
               <label>File type</label>
               <select id="blob-file-type"><option value="csv">CSV</option></select>
               <label>Prefix (optional)</label>
@@ -135,15 +155,15 @@
           </div>
         </div>
 
-        <div id="panel-local" class="source-panel source-panel-stacked active">
+        <div id="panel-local" class="source-panel {% if flow_config.source_type == 'local' or flow_config.get('local') %}active{% endif %}">
           <div class="connection-parameters">
-            <label class="step1-include-label"><input type="checkbox" id="include-local" {% if flow_config.get('use_local') or flow_config.source_type in ('local', 'multi') or (flow_config.get('upload_name') and temp_dir) %}checked{% endif %}> Include local file</label>
             <h3 class="connection-parameters-title">Local file</h3>
             <p class="step1-local-hint" style="margin:0 0 1rem; font-size:0.9rem; color:#5f6368;">Upload a CSV or other supported file. Top rows will be used for the dry run.</p>
             <input type="file" id="step1-local-file" name="file" accept=".csv,.txt,.json,.xml,.parquet" class="step1-local-file-input" aria-label="Choose file">
             <button type="button" id="step1-upload-file-btn" class="btn btn-primary step1-upload-btn">Upload file</button>
-            <p id="step1-uploaded-filename" class="step1-uploaded-filename" {% if not flow_config.get('upload_name') %}hidden{% endif %}>{% if flow_config.get('upload_name') %}Uploaded: {{ flow_config.upload_name }}{% endif %}</p>
-            <div id="step1-file-type-wrap" class="step1-file-type-wrap" {% if not flow_config.get('upload_name') %}hidden{% endif %}>
+            {% set _local_name = flow_config.get('local', {}).get('upload_name') or (flow_config.upload_name if flow_config.source_type == 'local' else '') %}
+            <p id="step1-uploaded-filename" class="step1-uploaded-filename" {% if not _local_name %}hidden{% endif %}>{% if _local_name %}Uploaded: {{ _local_name }}{% endif %}</p>
+            <div id="step1-file-type-wrap" class="step1-file-type-wrap" {% if not _local_name %}hidden{% endif %}>
               <label for="step1-local-file-type" class="step1-file-type-label">Detected file type:</label>
               <select id="step1-local-file-type" name="local_file_type" class="step1-file-type-select" aria-label="File type">
                 <option value="csv" {% if (flow_config.get('file_type') or 'csv') == 'csv' %}selected{% endif %}>CSV</option>
@@ -316,9 +336,34 @@
         cells.forEach(function(cell) { cell.classList.remove('synthetic-updated'); });
       }, 1200);
     }
+    var sectionLabels = { sql: 'SQL Server', blob: 'Azure Blob Storage', local: 'Local file', other: 'Other' };
     function renderDryRunList(expandedByDefault) {
       if (!filesData || !filesData.files.length) return;
-      var listHtml = '<ul class="dry-run-list">' + buildListItems(filesData, expandedByDefault !== false) + '</ul>';
+      var bySection = { sql: [], blob: [], local: [], other: [] };
+      filesData.files.forEach(function(f, i) {
+        var sec = f.section || 'other';
+        if (!bySection[sec]) sec = 'other';
+        bySection[sec].push({ file: f, index: i });
+      });
+      var listHtml = '';
+      ['sql', 'blob', 'local', 'other'].forEach(function(sec) {
+        var items = bySection[sec];
+        if (!items.length) return;
+        listHtml += '<section class="dry-run-source-section"><h3 class="dry-run-section-title">' + escapeHtml(sectionLabels[sec] || sec) + '</h3><ul class="dry-run-list">';
+        items.forEach(function(entry) {
+          var f = entry.file;
+          var fileIndex = entry.index;
+          var rules = fileRules[f.name] || null;
+          listHtml += '<li><details class="dry-run-details"' + (expandedByDefault ? ' open' : '') + '><summary class="file-summary-row">';
+          listHtml += '<span class="expand-icon-wrap">' + chevronSvg + '</span>';
+          listHtml += '<span class="file-name">' + escapeHtml(f.name) + '</span>';
+          listHtml += '<button type="button" class="btn btn-small rule-setup-btn" data-file-index="' + fileIndex + '">Field Rules</button>';
+          listHtml += '</summary><div class="file-preview" data-file-index="' + fileIndex + '">';
+          listHtml += renderFileTable(fileIndex, f, rules);
+          listHtml += '</div></details></li>';
+        });
+        listHtml += '</ul></section>';
+      });
       var hadModal = container.querySelector('#rule-setup-modal-overlay');
       if (hadModal) hadModal.remove();
       container.innerHTML = listHtml;
@@ -388,8 +433,7 @@
     }
     function runDryRun() {
       var maxRows = getDryRunRows();
-      /* SQL, blob, or multi without temp_dir: one POST merges/fetches then Delphix */
-      if (!tempDir && (sourceType === 'sql' || sourceType === 'blob' || sourceType === 'multi')) {
+      if (!tempDir) {
         if (triggerBtn) triggerBtn.disabled = true;
         container.innerHTML = '<p>Running synthetic data generation…</p>';
         fetch(runDryRunUrl, {
@@ -522,14 +566,27 @@
       <dd>{{ domain.name }}</dd>
       <dt>Source type</dt>
       <dd>{{ flow_config.source_type or '—' }}</dd>
-      {% if flow_config.source_type == 'sql' %}
+      {% if flow_config.get('sql') %}
+      <dt>SQL Server</dt>
+      <dd>{{ flow_config.sql.server or '—' }} / {{ flow_config.sql.database or '—' }}{% if flow_config.sql.export_mode == 'tables' %} ({{ flow_config.sql.tables|length or 0 }} tables){% endif %}</dd>
+      {% endif %}
+      {% if flow_config.get('blob') %}
+      <dt>Azure Blob</dt>
+      <dd>{{ flow_config.blob.account_name or '—' }} / {{ flow_config.blob.container or '—' }} ({{ flow_config.blob.selected_blobs|length or 0 }} files)</dd>
+      {% endif %}
+      {% if flow_config.get('local') and flow_config.local.get('upload_name') %}
+      <dt>Local file</dt>
+      <dd>{{ flow_config.local.upload_name }}</dd>
+      {% endif %}
+      {% if flow_config.source_type == 'sql' and not flow_config.get('sql') %}
       <dt>Server</dt>
       <dd>{{ flow_config.server or '—' }}</dd>
       <dt>Database</dt>
       <dd>{{ flow_config.database or '—' }}</dd>
       <dt>Export</dt>
       <dd>{{ flow_config.export_mode or '—' }}{% if flow_config.export_mode == 'tables' %} ({{ flow_config.tables|length or 0 }} tables){% endif %}</dd>
-      {% elif flow_config.source_type == 'blob' %}
+      {% endif %}
+      {% if flow_config.source_type == 'blob' and not flow_config.get('blob') %}
       <dt>Account</dt>
       <dd>{{ flow_config.account_name or '—' }}</dd>
       <dt>Container</dt>
@@ -538,22 +595,8 @@
       <dd>{{ flow_config.prefix or '—' }}</dd>
       <dt>Delimiter</dt>
       <dd>{{ flow_config.delimiter or ',' }}</dd>
-      {% elif flow_config.source_type == 'multi' %}
-      <dt>Sources</dt>
-      <dd>Multiple combined{% if flow_config.get('use_sql') %} (SQL){% endif %}{% if flow_config.get('use_blob') %} (Blob){% endif %}{% if flow_config.get('use_local') %} (Local){% endif %}</dd>
-      {% if flow_config.get('use_sql') %}
-      <dt>SQL Server</dt>
-      <dd>{{ flow_config.server or '—' }} / {{ flow_config.database or '—' }}</dd>
       {% endif %}
-      {% if flow_config.get('use_blob') %}
-      <dt>Blob</dt>
-      <dd>{{ flow_config.account_name or '—' }} / {{ flow_config.container or '—' }} ({{ flow_config.selected_blobs|length or 0 }} files)</dd>
-      {% endif %}
-      {% if flow_config.get('use_local') %}
-      <dt>Local file</dt>
-      <dd>{{ flow_config.upload_name or '—' }}</dd>
-      {% endif %}
-      {% elif flow_config.source_type == 'local' %}
+      {% if flow_config.source_type == 'local' and not flow_config.get('local') %}
       <dt>File</dt>
       <dd>{% if flow_config.get('skip_source_config') %}To be uploaded on next page{% else %}{{ flow_config.upload_name or 'Uploaded file' }}{% endif %}</dd>
       {% if flow_config.get('file_type') %}
@@ -588,61 +631,42 @@
 (function() {
   var step1Config = {};
   var step1TempDir = '';
-  var localFileUploaded = {{ 'true' if (flow_config.get('upload_name') and temp_dir) else 'false' }};
+  var localFileUploaded = {{ 'true' if ((flow_config.get('local') and flow_config.get('local', {}).get('upload_name')) or (flow_config.source_type == 'local' and flow_config.get('upload_name'))) and temp_dir else 'false' }};
   var flowConfigPrefill = {{ {
     'source_type': flow_config.get('source_type'),
-    'use_sql': flow_config.get('use_sql'),
-    'use_blob': flow_config.get('use_blob'),
-    'use_local': flow_config.get('use_local'),
-    'server': flow_config.get('server') or '',
-    'database': flow_config.get('database') or '',
-    'export_mode': flow_config.get('export_mode') or 'tables',
-    'tables': flow_config.get('tables') or [],
-    'query': flow_config.get('query') or '',
-    'account_name': flow_config.get('account_name') or '',
-    'container': flow_config.get('container') or '',
-    'prefix': flow_config.get('prefix') or '',
-    'delimiter': flow_config.get('delimiter') or ',',
-    'selected_blobs': flow_config.get('selected_blobs') or []
+    'sql': flow_config.get('sql'),
+    'blob': flow_config.get('blob'),
+    'server': (flow_config.get('sql') or {}).get('server') or flow_config.get('server') or '',
+    'database': (flow_config.get('sql') or {}).get('database') or flow_config.get('database') or '',
+    'export_mode': (flow_config.get('sql') or {}).get('export_mode') or flow_config.get('export_mode') or 'tables',
+    'tables': (flow_config.get('sql') or {}).get('tables') or flow_config.get('tables') or [],
+    'query': (flow_config.get('sql') or {}).get('query') or flow_config.get('query') or '',
+    'account_name': (flow_config.get('blob') or {}).get('account_name') or flow_config.get('account_name') or '',
+    'container': (flow_config.get('blob') or {}).get('container') or flow_config.get('container') or '',
+    'prefix': (flow_config.get('blob') or {}).get('prefix') or flow_config.get('prefix') or '',
+    'delimiter': (flow_config.get('blob') or {}).get('delimiter') or flow_config.get('delimiter') or ',',
+    'selected_blobs': (flow_config.get('blob') or {}).get('selected_blobs') or flow_config.get('selected_blobs') or []
   }|tojson }};
   var uploadLocalUrl = {{ url_for('flows_bp.upload_local', domain_id=domain.id)|tojson }};
   var updateLocalConfigUrl = {{ url_for('flows_bp.update_local_config', domain_id=domain.id)|tojson }};
 
-  function sqlReady() {
-    if (!step1Config.server || !step1Config.database) return false;
-    if (step1Config.export_mode === 'tables')
-      return step1Config.tables && step1Config.tables.length > 0;
-    if (step1Config.export_mode === 'query')
-      return step1Config.query && String(step1Config.query).trim() !== '';
+  function sqlBlockComplete(s) {
+    if (!s || !s.server || !s.database) return false;
+    if (s.export_mode === 'tables') return s.tables && s.tables.length > 0;
+    if (s.export_mode === 'query') return s.query && String(s.query).trim() !== '';
     return false;
   }
-  function blobReady() {
-    if (!step1Config.account_name || !step1Config.container) return false;
-    return step1Config.selected_blobs && step1Config.selected_blobs.length > 0;
-  }
-  function buildFullConfig() {
-    var incSql = document.getElementById('include-sql');
-    var incBlob = document.getElementById('include-blob');
-    var incLocal = document.getElementById('include-local');
-    step1Config.use_sql = incSql && incSql.checked;
-    step1Config.use_blob = incBlob && incBlob.checked;
-    step1Config.use_local = incLocal && incLocal.checked;
-    if (step1Config.use_sql) updateSqlConfig();
-    if (step1Config.use_blob) updateBlobConfig();
-    var n = (step1Config.use_sql ? 1 : 0) + (step1Config.use_blob ? 1 : 0) + (step1Config.use_local ? 1 : 0);
-    if (n >= 2) step1Config.source_type = 'multi';
-    else if (step1Config.use_sql) step1Config.source_type = 'sql';
-    else if (step1Config.use_blob) step1Config.source_type = 'blob';
-    else if (step1Config.use_local) step1Config.source_type = 'local';
-    else step1Config.source_type = '';
+  function blobBlockComplete(b) {
+    if (!b || !b.account_name || !b.container || !b.key) return false;
+    return b.selected_blobs && b.selected_blobs.length > 0;
   }
   function hasSourceConfigured() {
-    buildFullConfig();
-    var ok = false;
-    if (step1Config.use_sql && sqlReady()) ok = true;
-    if (step1Config.use_blob && blobReady()) ok = true;
-    if (step1Config.use_local && localFileUploaded) ok = true;
-    return ok;
+    if (localFileUploaded) return true;
+    if (sqlBlockComplete(step1Config.sql)) return true;
+    if (blobBlockComplete(step1Config.blob)) return true;
+    if (step1Config.source_type === 'sql' && sqlBlockComplete(step1Config)) return true;
+    if (step1Config.source_type === 'blob' && blobBlockComplete(step1Config)) return true;
+    return false;
   }
 
   function updateBlobConfig() {
@@ -654,14 +678,15 @@
     var delimiter = document.getElementById('blob-delimiter');
     var listEl = document.getElementById('blob-list');
     if (!account || !container) return;
-    step1Config.account_name = account.value.trim();
-    step1Config.container = container.value.trim();
-    step1Config.key = (key && key.value) ? key.value.trim() : '';
-    step1Config.prefix = (prefix && prefix.value) ? prefix.value.trim() : '';
-    step1Config.file_type = (fileType && fileType.value) ? fileType.value : 'csv';
-    step1Config.delimiter = (delimiter && delimiter.value) ? delimiter.value : ',';
-    step1Config.selected_blobs = listEl ? [].map.call(listEl.selectedOptions, function(o) { return o.value; }) : [];
-    buildFullConfig();
+    step1Config.blob = {
+      account_name: account.value.trim(),
+      container: container.value.trim(),
+      key: (key && key.value) ? key.value.trim() : '',
+      prefix: (prefix && prefix.value) ? prefix.value.trim() : '',
+      file_type: (fileType && fileType.value) ? fileType.value : 'csv',
+      delimiter: (delimiter && delimiter.value) ? delimiter.value : ',',
+      selected_blobs: listEl ? [].map.call(listEl.selectedOptions, function(o) { return o.value; }) : []
+    };
     enableNext();
   }
 
@@ -672,15 +697,18 @@
     var tablesSel = document.getElementById('sql-tables');
     var queryEl = document.getElementById('sql-query');
     if (!server || !database) return;
-    step1Config.server = server.value.trim();
-    step1Config.database = database.value.trim();
-    step1Config.export_mode = (modeRadio && modeRadio.value) || 'tables';
-    if (step1Config.export_mode === 'tables' && tablesSel) {
-      step1Config.tables = [].map.call(tablesSel.selectedOptions, function(o) { return o.value; });
-      step1Config.query = '';
+    var exportMode = (modeRadio && modeRadio.value) || 'tables';
+    step1Config.sql = {
+      server: server.value.trim(),
+      database: database.value.trim(),
+      export_mode: exportMode,
+      tables: [],
+      query: ''
+    };
+    if (exportMode === 'tables' && tablesSel) {
+      step1Config.sql.tables = [].map.call(tablesSel.selectedOptions, function(o) { return o.value; });
     } else if (queryEl) {
-      step1Config.query = queryEl.value.trim();
-      step1Config.tables = [];
+      step1Config.sql.query = queryEl.value.trim();
     }
     enableNext();
   }
@@ -710,42 +738,62 @@
   function enableNext() {
     var nextBtn = document.getElementById('step1-next');
     if (!nextBtn) return;
+    /* Keep Next enabled so click can show banner + shake when config incomplete */
     nextBtn.disabled = false;
     var configEl = document.getElementById('step1-config');
     var tempDirEl = document.getElementById('step1-temp-dir');
-    buildFullConfig();
-    /* Multi-source or blob/sql only: always POST config JSON. Local-only without others still uses upload session on POST with file. */
-    if (step1Config.use_sql || step1Config.use_blob || (step1Config.use_local && (step1Config.use_sql || step1Config.use_blob))) {
-      configEl.value = JSON.stringify(step1Config);
-      tempDirEl.value = step1TempDir;
-    } else if (step1Config.use_local && localFileUploaded) {
-      configEl.value = '';
-      tempDirEl.value = '';
-    } else {
-      configEl.value = JSON.stringify(step1Config);
-      tempDirEl.value = step1TempDir;
-    }
+    var payload = {};
+    if (step1Config.sql) payload.sql = step1Config.sql;
+    if (step1Config.blob) payload.blob = step1Config.blob;
+    if (step1Config.sql && !step1Config.blob && !localFileUploaded) payload.source_type = 'sql';
+    if (step1Config.blob && !step1Config.sql && !localFileUploaded) payload.source_type = 'blob';
+    configEl.value = (Object.keys(payload).length) ? JSON.stringify(payload) : '';
+    tempDirEl.value = localFileUploaded ? '' : step1TempDir;
     updateWarningBanner();
   }
 
-  ['include-sql', 'include-blob', 'include-local'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('change', enableNext);
+  function setActiveSource(src) {
+    document.querySelectorAll('.source-tab-item').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.source-panel').forEach(function(p) { p.classList.remove('active'); });
+    var tab = document.querySelector('.source-tab-item[data-source="' + src + '"]');
+    var panel = document.getElementById('panel-' + src);
+    if (tab) tab.classList.add('active');
+    if (panel) panel.classList.add('active');
+    if (src === 'sql') updateSqlConfig();
+    else if (src === 'blob') updateBlobConfig();
+    enableNext();
+  }
+
+  document.querySelectorAll('.source-tab-item').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var src = tab.getAttribute('data-source');
+      var radio = tab.querySelector('input[name="source_type"]');
+      if (radio) radio.checked = true;
+      setActiveSource(src);
+    });
   });
-  updateSqlConfig();
-  updateBlobConfig();
+  document.querySelectorAll('input[name="source_type"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      setActiveSource(this.value);
+    });
+  });
+
+  (function ensureSqlSelectedOnLoad() {
+    var checked = document.querySelector('input[name="source_type"]:checked');
+    var src = (checked && checked.value) ? checked.value : 'sql';
+    setActiveSource(src);
+  })();
 
   (function prefillFromSavedConfig() {
-    if (!flowConfigPrefill || !flowConfigPrefill.source_type) return;
-    if ((flowConfigPrefill.use_sql || flowConfigPrefill.source_type === 'sql' || flowConfigPrefill.source_type === 'multi') && flowConfigPrefill.server && flowConfigPrefill.database) {
-      var incSql = document.getElementById('include-sql');
-      if (incSql) incSql.checked = true;
-      step1Config.server = flowConfigPrefill.server;
-      step1Config.database = flowConfigPrefill.database;
-      step1Config.export_mode = flowConfigPrefill.export_mode || 'tables';
-      if (step1Config.export_mode === 'query') {
-        step1Config.query = flowConfigPrefill.query || '';
-        step1Config.tables = [];
+    if (!flowConfigPrefill) return;
+    if (flowConfigPrefill.server && flowConfigPrefill.database) {
+      step1Config.sql = step1Config.sql || {};
+      step1Config.sql.server = flowConfigPrefill.server;
+      step1Config.sql.database = flowConfigPrefill.database;
+      step1Config.sql.export_mode = flowConfigPrefill.export_mode || 'tables';
+      if (step1Config.sql.export_mode === 'query') {
+        step1Config.sql.query = flowConfigPrefill.query || '';
+        step1Config.sql.tables = [];
         updateSqlConfig();
       } else {
         fetch('/api/sql/tables?server=' + encodeURIComponent(flowConfigPrefill.server) + '&database=' + encodeURIComponent(flowConfigPrefill.database))
@@ -769,7 +817,7 @@
           }).catch(function() { updateSqlConfig(); });
       }
     }
-    if ((flowConfigPrefill.use_blob || flowConfigPrefill.source_type === 'blob' || flowConfigPrefill.source_type === 'multi') && flowConfigPrefill.selected_blobs && flowConfigPrefill.selected_blobs.length) {
+    if (flowConfigPrefill.selected_blobs && flowConfigPrefill.selected_blobs.length) {
       var sel = document.getElementById('blob-list');
       if (sel) {
         sel.innerHTML = '';
@@ -781,15 +829,15 @@
           sel.appendChild(opt);
         });
       }
-      var incBlob = document.getElementById('include-blob');
-      if (incBlob) incBlob.checked = true;
-      step1Config.account_name = flowConfigPrefill.account_name || '';
-      step1Config.container = flowConfigPrefill.container || '';
-      step1Config.prefix = flowConfigPrefill.prefix || '';
-      step1Config.delimiter = flowConfigPrefill.delimiter || ',';
-      step1Config.file_type = 'csv';
-      step1Config.selected_blobs = flowConfigPrefill.selected_blobs.slice();
-      step1Config.key = '';
+      step1Config.blob = {
+        account_name: flowConfigPrefill.account_name || '',
+        container: flowConfigPrefill.container || '',
+        prefix: flowConfigPrefill.prefix || '',
+        delimiter: flowConfigPrefill.delimiter || ',',
+        file_type: 'csv',
+        selected_blobs: flowConfigPrefill.selected_blobs.slice(),
+        key: ''
+      };
       enableNext();
     }
   })();
@@ -798,18 +846,17 @@
   if (step1Form) {
     step1Form.addEventListener('submit', function(e) {
       var banner = document.getElementById('step1-warning-banner');
-      buildFullConfig();
       if (!hasSourceConfigured()) {
         e.preventDefault();
         if (banner) {
-          if (step1Config.use_sql && !sqlReady()) {
-            banner.textContent = 'SQL: complete connection and select tables or provide a query';
-          } else if (step1Config.use_blob && !blobReady()) {
-            banner.textContent = 'Blob: connect and select at least one file';
-          } else if (step1Config.use_local && !localFileUploaded) {
-            banner.textContent = 'Upload a file for local source';
+          if (step1Config.sql && !sqlBlockComplete(step1Config.sql)) {
+            banner.textContent = 'Select at least one table or provide a query';
+          } else if (step1Config.blob && !blobBlockComplete(step1Config.blob)) {
+            banner.textContent = 'Select at least one file';
+          } else if (document.querySelector('input[name="source_type"][value="local"]') && document.querySelector('input[name="source_type"][value="local"]').checked) {
+            banner.textContent = 'Upload a file to continue';
           } else {
-            banner.textContent = 'Enable at least one source and complete its configuration.';
+            banner.textContent = 'Please configure a data source or upload a file to continue.';
           }
           banner.removeAttribute('hidden');
           attentionBanner(banner);
@@ -847,8 +894,9 @@
               typeWrap.removeAttribute('hidden');
               if (typeSelect && data.file_type) typeSelect.value = data.file_type;
             }
-            var incLocal = document.getElementById('include-local');
-            if (incLocal) incLocal.checked = true;
+            var localRadio = document.querySelector('input[name="source_type"][value="local"]');
+            if (localRadio) localRadio.checked = true;
+            setActiveSource('local');
             enableNext();
           } else {
             if (uploadedFilenameEl) {
@@ -914,10 +962,9 @@
         msg.textContent = 'Connected.';
         msg.className = 'success';
         document.getElementById('sql-after-validate').style.display = 'block';
-        var incSql = document.getElementById('include-sql');
-        if (incSql) incSql.checked = true;
-        step1Config.server = server;
-        step1Config.database = database;
+        step1Config.sql = step1Config.sql || {};
+        step1Config.sql.server = server;
+        step1Config.sql.database = database;
         updateSqlConfig();
         fetch('/api/sql/tables?server=' + encodeURIComponent(server) + '&database=' + encodeURIComponent(database))
           .then(function(r) { return r.json(); })

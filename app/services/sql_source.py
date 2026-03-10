@@ -83,70 +83,15 @@ def export_query_top10(server, database, query, temp_dir):
     return export_query_top_n(server, database, query, temp_dir, 10)
 
 
-def export_tables_top_n(server, database, table_list, temp_dir, n):
-    """Export up to n rows per table to CSV files in temp_dir. Returns (True, files) or (False, error)."""
+def export_tables_top_n(server, database, table_list, temp_dir, n, filename_prefix=""):
+    """Export up to n rows per table to CSV files in temp_dir. Optional filename_prefix avoids collisions when merging sources."""
     if not table_list:
         return False, "No tables selected"
     if n is None or n < 1:
         n = 1
-    try:
-        import pyodbc
-        conn = pyodbc.connect(_conn_str(server, database))
-        cur = conn.cursor()
-        files = []
-        for qual in table_list:
-            parts = qual.split(".", 1)
-            if len(parts) == 2:
-                schema, name = parts
-            else:
-                schema, name = "dbo", qual
-            safe_name = name.replace(" ", "_")
-            fpath = os.path.join(temp_dir, f"{safe_name}.csv")
-            cur.execute(f"SELECT TOP ({n}) * FROM [{schema}].[{name}]")
-            rows = cur.fetchall()
-            if rows:
-                with open(fpath, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    writer.writerow([d[0] for d in cur.description])
-                    writer.writerows(rows)
-            else:
-                with open(fpath, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    writer.writerow([d[0] for d in cur.description])
-            files.append({"name": os.path.basename(fpath), "path": fpath})
-        conn.close()
-        return True, files
-    except Exception as e:
-        return False, str(e)
-
-
-def export_query_top_n(server, database, query, temp_dir, n):
-    """Wrap query in SELECT TOP (n) * FROM (query) AS t, execute, write one CSV. Returns (True, files) or (False, error)."""
-    if n is None or n < 1:
-        n = 1
-    try:
-        import pyodbc
-        conn = pyodbc.connect(_conn_str(server, database))
-        wrapped = f"SELECT TOP ({n}) * FROM ({query.strip().rstrip(';')}) AS t"
-        cur = conn.execute(wrapped)
-        fpath = os.path.join(temp_dir, "query_result.csv")
-        rows = cur.fetchall()
-        with open(fpath, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([d[0] for d in cur.description])
-            writer.writerows(rows)
-        conn.close()
-        return True, [{"name": "query_result.csv", "path": fpath}]
-    except Exception as e:
-        return False, str(e)
-
-
-def export_tables_top_n_prefixed(server, database, table_list, temp_dir, n, prefix="sql"):
-    """Like export_tables_top_n but each file is named {prefix}_{safe_table}.csv for merge."""
-    if not table_list:
-        return False, "No tables selected"
-    if n is None or n < 1:
-        n = 1
+    prefix = (filename_prefix or "").strip()
+    if prefix and not prefix.endswith("_"):
+        prefix = prefix + "_"
     try:
         import pyodbc
         conn = pyodbc.connect(_conn_str(server, database))
@@ -159,7 +104,7 @@ def export_tables_top_n_prefixed(server, database, table_list, temp_dir, n, pref
             else:
                 schema, name = "dbo", qual
             safe_name = name.replace(" ", "_").replace(".", "_")
-            fpath = os.path.join(temp_dir, f"{prefix}_{safe_name}.csv")
+            fpath = os.path.join(temp_dir, f"{prefix}{safe_name}.csv")
             cur.execute(f"SELECT TOP ({n}) * FROM [{schema}].[{name}]")
             rows = cur.fetchall()
             if rows:
@@ -178,16 +123,19 @@ def export_tables_top_n_prefixed(server, database, table_list, temp_dir, n, pref
         return False, str(e)
 
 
-def export_query_top_n_prefixed(server, database, query, temp_dir, n, prefix="sql"):
-    """Like export_query_top_n but writes {prefix}_query_result.csv."""
+def export_query_top_n(server, database, query, temp_dir, n, filename_prefix=""):
+    """Wrap query in SELECT TOP (n) * FROM (query) AS t, execute, write one CSV. Optional filename_prefix for multi-source merge."""
     if n is None or n < 1:
         n = 1
+    prefix = (filename_prefix or "").strip()
+    if prefix and not prefix.endswith("_"):
+        prefix = prefix + "_"
     try:
         import pyodbc
         conn = pyodbc.connect(_conn_str(server, database))
         wrapped = f"SELECT TOP ({n}) * FROM ({query.strip().rstrip(';')}) AS t"
         cur = conn.execute(wrapped)
-        fpath = os.path.join(temp_dir, f"{prefix}_query_result.csv")
+        fpath = os.path.join(temp_dir, f"{prefix}query_result.csv")
         rows = cur.fetchall()
         with open(fpath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -210,12 +158,35 @@ def fetch_sql_dry_run(server, database, export_mode, tables_or_query, max_rows, 
     if export_mode == "tables":
         if not tables_or_query:
             return False, "No tables selected"
-        ok, result = export_tables_top_n(server, database, tables_or_query, subdir, max_rows)
+        ok, result = export_tables_top_n(server, database, tables_or_query, subdir, max_rows, filename_prefix="")
     else:
         query = (tables_or_query or "").strip()
         if not query:
             return False, "Query is empty"
-        ok, result = export_query_top_n(server, database, query, subdir, max_rows)
+        ok, result = export_query_top_n(server, database, query, subdir, max_rows, filename_prefix="")
     if not ok:
         return False, result
     return True, subdir
+
+
+def export_sql_into_dir(server, database, export_mode, tables_or_query, max_rows, temp_dir):
+    """
+    Export SQL tables or query into existing temp_dir with sql_ filename prefix.
+    Returns (True, None) or (False, error_message).
+    """
+    if export_mode == "tables":
+        if not tables_or_query:
+            return False, "No tables selected"
+        ok, result = export_tables_top_n(
+            server, database, tables_or_query, temp_dir, max_rows, filename_prefix="sql"
+        )
+    else:
+        query = (tables_or_query or "").strip()
+        if not query:
+            return False, "Query is empty"
+        ok, result = export_query_top_n(
+            server, database, query, temp_dir, max_rows, filename_prefix="sql"
+        )
+    if not ok:
+        return False, result
+    return True, None

@@ -89,22 +89,17 @@ def _handle_step1_local_upload(domain_id):
     )
     if not ok:
         return False
-    prev = session.get(SESSION_FLOW_CONFIG) or {}
-    # Merge into existing multi-source config if present
-    session[SESSION_FLOW_CONFIG] = {
-        **{k: v for k, v in prev.items() if k not in ("source_type", "upload_name", "file_type", "delimiter", "has_header", "end_of_record", "detected_file_type", "detected_delimiter", "detected_has_header", "detected_end_of_record")},
-        "source_type": "local",
-        "use_local": True,
+    cfg = session.get(SESSION_FLOW_CONFIG) or {}
+    cfg["local"] = {
         "upload_name": f.filename,
         "file_type": file_type,
         "delimiter": delimiter,
         "has_header": has_header,
         "end_of_record": end_of_record,
-        "detected_file_type": detected.get("file_type", "csv"),
-        "detected_delimiter": detected.get("delimiter", ","),
-        "detected_has_header": detected.get("has_header", True),
-        "detected_end_of_record": detected.get("end_of_record", "\n"),
+        "temp_dir": subdir,
     }
+    cfg["source_type"] = "multi" if (cfg.get("sql") or cfg.get("blob")) else "local"
+    session[SESSION_FLOW_CONFIG] = cfg
     session[SESSION_TEMP_DIR] = subdir
     return True
 
@@ -142,34 +137,46 @@ def update_local_config(domain_id):
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
-    if not cfg.get("use_local") and cfg.get("source_type") != "local":
+    if not cfg.get("local") and cfg.get("source_type") != "local":
         return jsonify({"ok": False, "error": "Not a local file flow"}), 400
     data = request.get_json(silent=True) or {}
+    loc = cfg.get("local") if isinstance(cfg.get("local"), dict) else cfg
     if "file_type" in data:
         v = (data.get("file_type") or "csv").strip().lower()
         if v in ("csv", "json", "xml", "parquet"):
+            if isinstance(cfg.get("local"), dict):
+                cfg["local"]["file_type"] = v
             cfg["file_type"] = v
     if "delimiter" in data:
-        cfg["delimiter"] = data["delimiter"] if data["delimiter"] is not None else ","
+        d = data["delimiter"] if data["delimiter"] is not None else ","
+        if isinstance(cfg.get("local"), dict):
+            cfg["local"]["delimiter"] = d
+        cfg["delimiter"] = d
     if "has_header" in data:
-        cfg["has_header"] = data["has_header"] in (True, "true", "1", "yes")
+        h = data["has_header"] in (True, "true", "1", "yes")
+        if isinstance(cfg.get("local"), dict):
+            cfg["local"]["has_header"] = h
+        cfg["has_header"] = h
     if "end_of_record" in data:
         e = (data.get("end_of_record") or "\n")
-        cfg["end_of_record"] = "\r\n" if e in ("\r\n", "crlf", "windows") else "\n"
+        e = "\r\n" if e in ("\r\n", "crlf", "windows") else "\n"
+        if isinstance(cfg.get("local"), dict):
+            cfg["local"]["end_of_record"] = e
+        cfg["end_of_record"] = e
     session[SESSION_FLOW_CONFIG] = cfg
     return jsonify({"ok": True})
 
 
 @flows_bp.route("/run-dry-run", methods=["POST"])
 def run_dry_run(domain_id):
-    """Run Delphix synthetic data generation; called from step 2 when user clicks Dry Run."""
+    """Run Delphix synthetic data generation; called from step 2 when user clicks Dry Run.
+    Supports multi-source: SQL + Blob + Local aggregated into one temp_dir with prefixed CSV names."""
     domain = get_domain(current_app, domain_id)
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
-    temp_dir = session.get(SESSION_TEMP_DIR) or ""
+    session_temp_dir = session.get(SESSION_TEMP_DIR) or ""
 
-    # Optional JSON body: max_rows (1-10) for SQL dry run when temp_dir not yet set
     max_rows = 10
     if request.get_data():
         try:
@@ -180,67 +187,77 @@ def run_dry_run(domain_id):
         except (TypeError, ValueError):
             pass
 
-    def _is_multi_source(c):
-        n = sum(1 for k in ("use_sql", "use_blob", "use_local") if c.get(k))
-        return n >= 2
+    from app.services.flow_config_sources import (
+        get_source_blocks,
+        has_any_source,
+        copy_local_csvs_into_dir,
+    )
+
+    sql_block, blob_block, local_block = get_source_blocks(cfg, session_temp_dir)
+    if not has_any_source(cfg, session_temp_dir):
+        return jsonify({"ok": False, "error": "No data source configured. Complete step 1 first."}), 400
 
     temp_base = current_app.config["TEMP_BASE"]
+    os.makedirs(temp_base, exist_ok=True)
+    combined_dir = os.path.join(temp_base, str(uuid.uuid4()))
+    os.makedirs(combined_dir, exist_ok=True)
 
-    # Multi-source: merge SQL + blob + local into one temp_dir, then Delphix once
-    if _is_multi_source(cfg):
-        local_dir = temp_dir if cfg.get("use_local") else None
-        from app.services.merge_dry_run import merge_dry_run_sources
-        ok, result = merge_dry_run_sources(cfg, max_rows, temp_base, local_temp_dir=local_dir)
-        if not ok:
-            return jsonify({"ok": False, "error": result}), 400
-        temp_dir = result
-        session[SESSION_TEMP_DIR] = temp_dir
-        cfg["source_type"] = "multi"
-        session[SESSION_FLOW_CONFIG] = cfg
-
-    # SQL with no temp_dir yet: fetch from SQL with max_rows, then run Delphix
-    elif cfg.get("source_type") == "sql" and not temp_dir:
-        server = cfg.get("server", "").strip()
-        database = cfg.get("database", "").strip()
-        export_mode = cfg.get("export_mode") or "tables"
-        tables = cfg.get("tables") or []
-        query = (cfg.get("query") or "").strip()
-        if not server or not database:
-            return jsonify({"ok": False, "error": "SQL server and database required"}), 400
-        if export_mode == "tables" and not tables:
-            return jsonify({"ok": False, "error": "Select at least one table or provide a query"}), 400
-        if export_mode == "query" and not query:
-            return jsonify({"ok": False, "error": "Select at least one table or provide a query"}), 400
-        from app.services.sql_source import fetch_sql_dry_run
-        tables_or_query = tables if export_mode == "tables" else query
-        ok, result = fetch_sql_dry_run(server, database, export_mode, tables_or_query, max_rows, temp_base)
-        if not ok:
-            return jsonify({"ok": False, "error": result}), 400
-        temp_dir = result
-        session[SESSION_TEMP_DIR] = temp_dir
-
-    # Blob with no temp_dir yet: fetch from blob with max_rows per file, then run Delphix
-    elif cfg.get("source_type") == "blob" and not temp_dir:
-        account_name = cfg.get("account_name", "").strip()
-        container = cfg.get("container", "").strip()
-        key = (cfg.get("key") or "").strip()
-        selected_blobs = cfg.get("selected_blobs") or []
-        delimiter = cfg.get("delimiter", ",") or ","
-        if not account_name or not container or not key:
-            return jsonify({"ok": False, "error": "Blob account, container and key required"}), 400
-        if not selected_blobs:
-            return jsonify({"ok": False, "error": "Select at least one file"}), 400
-        from app.services.blob_source import fetch_blob_dry_run
-        ok, result = fetch_blob_dry_run(
-            account_name, container, key, selected_blobs, delimiter, max_rows, temp_base
+    if sql_block:
+        from app.services.sql_source import export_sql_into_dir
+        tables_or_query = (
+            sql_block["tables"] if sql_block.get("export_mode") == "tables" else sql_block.get("query", "")
+        )
+        ok, err = export_sql_into_dir(
+            sql_block["server"],
+            sql_block["database"],
+            sql_block.get("export_mode") or "tables",
+            tables_or_query,
+            max_rows,
+            combined_dir,
         )
         if not ok:
-            return jsonify({"ok": False, "error": result}), 400
-        temp_dir = result
-        session[SESSION_TEMP_DIR] = temp_dir
+            return jsonify({"ok": False, "error": err or "SQL export failed"}), 400
 
-    if not temp_dir:
-        return jsonify({"ok": False, "error": "No temp data. Complete step 1 first."}), 400
+    if blob_block:
+        from app.services.blob_source import export_blob_into_dir
+        ok, err = export_blob_into_dir(
+            blob_block["account_name"],
+            blob_block["container"],
+            blob_block["key"],
+            blob_block["selected_blobs"],
+            blob_block.get("delimiter") or ",",
+            max_rows,
+            combined_dir,
+        )
+        if not ok:
+            return jsonify({"ok": False, "error": err or "Blob export failed"}), 400
+
+    if local_block:
+        local_td = local_block.get("temp_dir") or session_temp_dir
+        ok, err = copy_local_csvs_into_dir(local_td, combined_dir, prefix="local")
+        if not ok:
+            return jsonify({"ok": False, "error": err or "Local copy failed"}), 400
+
+    if not os.listdir(combined_dir):
+        return jsonify({"ok": False, "error": "No CSV files produced. Complete step 1 first."}), 400
+
+    temp_dir = combined_dir
+    session[SESSION_TEMP_DIR] = temp_dir
+    if sql_block and not cfg.get("sql"):
+        cfg["sql"] = {k: v for k, v in sql_block.items() if k != "key"}
+    if blob_block and not cfg.get("blob"):
+        cfg["blob"] = {k: v for k, v in blob_block.items() if k != "key"}
+    if local_block and not cfg.get("local"):
+        cfg["local"] = {k: v for k, v in local_block.items() if k != "temp_dir"}
+    cfg["source_type"] = "multi" if sum(1 for b in (sql_block, blob_block, local_block) if b) > 1 else (
+        "sql" if sql_block else "blob" if blob_block else "local"
+    )
+    delimiter = ","
+    if blob_block:
+        delimiter = blob_block.get("delimiter") or ","
+    elif cfg.get("delimiter"):
+        delimiter = cfg.get("delimiter")
+    cfg["delimiter"] = delimiter
 
     data_generation_key = domain.get("data_generation_key") or ""
     ok, result = run_delphix_flow(
@@ -253,10 +270,7 @@ def run_dry_run(domain_id):
         return jsonify({"ok": False, "error": result or "Delphix failed"}), 400
     cfg["delphix"] = result
     session[SESSION_FLOW_CONFIG] = cfg
-    response = {"ok": True, "delphix": result}
-    if cfg.get("source_type") in ("sql", "blob", "multi"):
-        response["temp_dir"] = temp_dir
-    return jsonify(response)
+    return jsonify({"ok": True, "delphix": result, "temp_dir": temp_dir})
 
 
 @flows_bp.route("/new", methods=["GET", "POST"])
@@ -281,19 +295,30 @@ def new(domain_id):
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
             # Local file: back from step 2 with no new file — keep existing session and go to step 2
             cfg = session.get(SESSION_FLOW_CONFIG) or {}
-            if cfg.get("source_type") == "local" and session.get(SESSION_TEMP_DIR):
+            if (cfg.get("source_type") == "local" or cfg.get("local")) and session.get(SESSION_TEMP_DIR):
                 return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
             # SQL/Blob: config and temp_dir from form; SQL may have empty temp_dir (fetched on step 2)
             config_json = request.form.get("config")
             temp_dir = request.form.get("temp_dir", "").strip()
             if config_json:
                 try:
-                    cfg = json.loads(config_json)
+                    incoming = json.loads(config_json)
+                    cfg = session.get(SESSION_FLOW_CONFIG) or {}
+                    if incoming.get("sql"):
+                        cfg["sql"] = incoming["sql"]
+                    if incoming.get("blob"):
+                        cfg["blob"] = incoming["blob"]
+                    if incoming.get("source_type") == "sql" and not incoming.get("sql"):
+                        cfg["sql"] = {k: incoming[k] for k in ("server", "database", "export_mode", "tables", "query", "delimiter") if k in incoming}
+                    if incoming.get("source_type") == "blob" and not incoming.get("blob"):
+                        cfg["blob"] = {k: incoming[k] for k in ("account_name", "container", "key", "selected_blobs", "prefix", "delimiter", "file_type") if k in incoming}
+                    if cfg.get("sql") or cfg.get("blob") or cfg.get("local"):
+                        cfg["source_type"] = "multi" if sum(1 for k in ("sql", "blob", "local") if cfg.get(k)) > 1 else (
+                            "sql" if cfg.get("sql") else "blob" if cfg.get("blob") else "local"
+                        )
                     session[SESSION_FLOW_CONFIG] = cfg
-                    if cfg.get("source_type") in ("sql", "blob"):
-                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty; fetched on step 2
-                    elif temp_dir:
-                        session[SESSION_TEMP_DIR] = temp_dir
+                    if not cfg.get("local"):
+                        session[SESSION_TEMP_DIR] = temp_dir if temp_dir else ""
                 except json.JSONDecodeError:
                     pass
             return redirect(url_for("flows_bp.new", domain_id=domain_id, step=2), code=303)
@@ -364,18 +389,29 @@ def edit(domain_id, flow_id):
             if _handle_step1_local_upload(domain_id):
                 return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)
             cfg = session.get(SESSION_FLOW_CONFIG) or {}
-            if cfg.get("source_type") == "local" and session.get(SESSION_TEMP_DIR):
+            if (cfg.get("source_type") == "local" or cfg.get("local")) and session.get(SESSION_TEMP_DIR):
                 return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)
             config_json = request.form.get("config")
             temp_dir = request.form.get("temp_dir", "").strip()
             if config_json:
                 try:
-                    cfg = json.loads(config_json)
+                    incoming = json.loads(config_json)
+                    cfg = session.get(SESSION_FLOW_CONFIG) or {}
+                    if incoming.get("sql"):
+                        cfg["sql"] = incoming["sql"]
+                    if incoming.get("blob"):
+                        cfg["blob"] = incoming["blob"]
+                    if incoming.get("source_type") == "sql" and not incoming.get("sql"):
+                        cfg["sql"] = {k: incoming[k] for k in ("server", "database", "export_mode", "tables", "query", "delimiter") if k in incoming}
+                    if incoming.get("source_type") == "blob" and not incoming.get("blob"):
+                        cfg["blob"] = {k: incoming[k] for k in ("account_name", "container", "key", "selected_blobs", "prefix", "delimiter", "file_type") if k in incoming}
+                    if cfg.get("sql") or cfg.get("blob") or cfg.get("local"):
+                        cfg["source_type"] = "multi" if sum(1 for k in ("sql", "blob", "local") if cfg.get(k)) > 1 else (
+                            "sql" if cfg.get("sql") else "blob" if cfg.get("blob") else "local"
+                        )
                     session[SESSION_FLOW_CONFIG] = cfg
-                    if cfg.get("source_type") in ("sql", "blob"):
-                        session[SESSION_TEMP_DIR] = temp_dir  # allow empty; fetched on step 2
-                    elif temp_dir:
-                        session[SESSION_TEMP_DIR] = temp_dir
+                    if not cfg.get("local"):
+                        session[SESSION_TEMP_DIR] = temp_dir if temp_dir else ""
                 except json.JSONDecodeError:
                     pass
             return redirect(url_for("flows_bp.edit", domain_id=domain_id, flow_id=flow_id, step=2), code=303)

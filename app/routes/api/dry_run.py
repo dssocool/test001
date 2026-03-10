@@ -51,7 +51,8 @@ def files():
                         rows.append(row)
             except Exception as e:
                 rows = [["Error reading file: " + str(e)]]
-            result.append({"name": display_name, "path": path, "rows": rows})
+            section = _section_from_filename(display_name)
+            result.append({"name": display_name, "path": path, "rows": rows, "section": section})
         return jsonify({"ok": True, "files": result})
 
     # Legacy: no snapshot yet — read from temp_dir as before
@@ -73,8 +74,22 @@ def files():
                     rows.append(row)
         except Exception as e:
             rows = [["Error reading file: " + str(e)]]
-        result.append({"name": name, "path": path, "rows": rows})
+        section = _section_from_filename(name)
+        result.append({"name": name, "path": path, "rows": rows, "section": section})
     return jsonify({"ok": True, "files": result})
+
+
+def _section_from_filename(name):
+    if not name:
+        return "other"
+    lower = name.lower()
+    if lower.startswith("sql_"):
+        return "sql"
+    if lower.startswith("blob_"):
+        return "blob"
+    if lower.startswith("local_"):
+        return "local"
+    return "other"
 
 
 @dry_run_bp.route("/masked-file", methods=["GET"])

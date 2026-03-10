@@ -187,9 +187,6 @@ form textarea { min-height: 100px; }
 
 .source-panel { display: none; }
 .source-panel.active { display: block; }
-.source-panel-stacked { display: block; margin-bottom: 1rem; }
-.step1-include-label { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; margin-bottom: 0.75rem; cursor: pointer; }
-.step1-include-label input { width: auto; margin: 0; }
 .source-panel .field-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
 .source-panel .field-group { flex: 1; min-width: 200px; }
 .source-panel .field-group label { display: block; font-size: 0.9rem; font-weight: 500; color: #374151; margin-bottom: 0.35rem; }
@@ -206,6 +203,8 @@ form textarea { min-height: 100px; }
 .dry-run-local-placeholder { padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6; }
 
 .dry-run-section { margin-bottom: 1rem; }
+.dry-run-source-section { margin-bottom: 1.5rem; }
+.dry-run-section-title { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; color: #202124; }
 .dry-run-rows-wrap { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
 .dry-run-rows-label { font-weight: 500; }
 .dry-run-rows-value { min-width: 1.5rem; font-variant-numeric: tabular-nums; }
