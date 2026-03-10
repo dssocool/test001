@@ -36,16 +36,18 @@
     <ul class="domain-card-flows">
       {% for flow in domain.flows %}
       {% set flow_config = flow.config or {} %}
-      {% set has_blob = flow_config.get('blob') or flow_config.get('source_type') == 'blob' %}
+      {% set _blob_cfg = flow_config.get('blob') or {} %}
+      {% set has_blob = _blob_cfg or flow_config.get('source_type') == 'blob' %}
       {% set has_sql = flow_config.get('sql') or flow_config.get('source_type') == 'sql' %}
       {% set local_only = (flow_config.get('source_type') == 'local' or flow_config.get('local')) and not has_sql and not has_blob %}
       {% set runnable = has_sql or has_blob %}
+      {% set has_stored_blob_key = _blob_cfg.get('blob_key_encrypted') %}
       <li class="domain-card-flow-item">
         <div class="domain-card-flow-row">
           <span class="domain-card-flow-name">{{ flow.name or 'Flow #' ~ flow.id }}</span>
           <div class="domain-card-flow-actions">
             {% if runnable %}
-            <button type="button" class="domain-card-flow-icon-btn domain-card-flow-run-btn" aria-label="Run flow" title="Run flow" data-domain-id="{{ domain.id }}" data-flow-id="{{ flow.id }}" data-has-blob="{{ '1' if has_blob else '0' }}" data-local-only="{{ '1' if local_only else '0' }}">
+            <button type="button" class="domain-card-flow-icon-btn domain-card-flow-run-btn" aria-label="Run flow" title="Run flow" data-domain-id="{{ domain.id }}" data-flow-id="{{ flow.id }}" data-has-blob="{{ '1' if has_blob else '0' }}" data-has-stored-blob-key="{{ '1' if has_stored_blob_key else '0' }}" data-local-only="{{ '1' if local_only else '0' }}">
               <svg class="domain-card-flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             {% elif local_only %}
@@ -118,12 +120,14 @@
   var currentDomainId = null;
   var currentFlowId = null;
   var currentHasBlob = false;
+  var currentHasStoredBlobKey = false;
 
-  function openModal(domainId, flowId, hasBlob) {
+  function openModal(domainId, flowId, hasBlob, hasStoredBlobKey) {
     currentDomainId = domainId;
     currentFlowId = flowId;
     currentHasBlob = !!hasBlob;
-    if (blobKeyWrap) blobKeyWrap.hidden = !currentHasBlob;
+    currentHasStoredBlobKey = !!hasStoredBlobKey;
+    if (blobKeyWrap) blobKeyWrap.hidden = !currentHasBlob || currentHasStoredBlobKey;
     if (blobKeyInput) blobKeyInput.value = '';
     if (overlay) {
       overlay.hidden = false;
@@ -140,7 +144,7 @@
   function runNow() {
     if (!currentDomainId || !currentFlowId) return;
     var body = {};
-    if (currentHasBlob && blobKeyInput) {
+    if (currentHasBlob && !currentHasStoredBlobKey && blobKeyInput) {
       var key = (blobKeyInput.value || '').trim();
       if (!key) {
         alert('Storage account key is required for this flow.');
@@ -182,7 +186,8 @@
       var domainId = btn.getAttribute('data-domain-id');
       var flowId = btn.getAttribute('data-flow-id');
       var hasBlob = btn.getAttribute('data-has-blob') === '1';
-      openModal(domainId, flowId, hasBlob);
+      var hasStoredBlobKey = btn.getAttribute('data-has-stored-blob-key') === '1';
+      openModal(domainId, flowId, hasBlob, hasStoredBlobKey);
     });
   });
 })();

@@ -4,6 +4,7 @@ import os
 import threading
 import uuid
 from flask import Blueprint, render_template, request, redirect, url_for, current_app, session, jsonify
+from itsdangerous import URLSafeTimedSerializer, BadSignature
 
 from app.models import get_domain, get_flow, get_flow_count, create_flow, update_flow, delete_flow
 from app.services.delphix_flow import run_delphix_flow
@@ -12,6 +13,25 @@ from app.services.flow_config_persist import persist_flow_config
 flows_bp = Blueprint("flows_bp", __name__)
 SESSION_FLOW_CONFIG = "flow_config"
 SESSION_TEMP_DIR = "flow_temp_dir"
+
+
+def _encrypt_blob_key(secret_key, plain_key):
+    """Serialize and sign blob key for storage. Returns a string."""
+    if not plain_key:
+        return None
+    s = URLSafeTimedSerializer(secret_key or "dev-secret-key", salt="flow-blob-key")
+    return s.dumps(plain_key)
+
+
+def _decrypt_blob_key(secret_key, encrypted_key):
+    """Deserialize and verify stored blob key. Returns plain key or None."""
+    if not encrypted_key:
+        return None
+    s = URLSafeTimedSerializer(secret_key or "dev-secret-key", salt="flow-blob-key")
+    try:
+        return s.loads(encrypted_key, max_age=60 * 60 * 24 * 365)  # 1 year
+    except BadSignature:
+        return None
 
 
 def _render_flow_step1(app, domain_id, flow_config, temp_dir, delphix_error=None, edit_flow_id=None, flow=None):
@@ -240,7 +260,10 @@ def run_dry_run(domain_id):
             return jsonify({"ok": False, "error": err or "Local copy failed"}), 400
 
     if not os.listdir(combined_dir):
-        return jsonify({"ok": False, "error": "No CSV files produced. Complete step 1 first."}), 400
+        return jsonify({
+            "ok": False,
+            "error": "No data to export. Select at least one table (SQL Server), one file (Azure Blob), or upload a local file.",
+        }), 400
 
     temp_dir = combined_dir
     session[SESSION_TEMP_DIR] = temp_dir
@@ -335,6 +358,10 @@ def new(domain_id):
                     cfg = None
             if cfg is not None:
                 to_save = persist_flow_config(cfg, existing=None)
+                blob_key = (cfg.get("blob") or {}).get("key", "").strip()
+                if to_save.get("blob") and blob_key:
+                    secret = current_app.config.get("SECRET_KEY")
+                    to_save["blob"]["blob_key_encrypted"] = _encrypt_blob_key(secret, blob_key)
                 create_flow(current_app, domain_id, request.form.get("name"), to_save)
             session.pop(SESSION_FLOW_CONFIG, None)
             session.pop(SESSION_TEMP_DIR, None)
@@ -404,14 +431,20 @@ def edit(domain_id, flow_id):
                 try:
                     incoming = json.loads(config_json)
                     cfg = session.get(SESSION_FLOW_CONFIG) or {}
+                    # Preserve blob key when editing (form does not send key; we had injected it or have encrypted)
+                    preserved_blob_key = (cfg.get("blob") or {}).get("key") if cfg.get("blob") else None
                     if incoming.get("sql"):
                         cfg["sql"] = incoming["sql"]
                     if incoming.get("blob"):
                         cfg["blob"] = incoming["blob"]
+                        if preserved_blob_key and not (cfg.get("blob") or {}).get("key"):
+                            cfg["blob"]["key"] = preserved_blob_key
                     if incoming.get("source_type") == "sql" and not incoming.get("sql"):
                         cfg["sql"] = {k: incoming[k] for k in ("server", "database", "export_mode", "tables", "query", "delimiter") if k in incoming}
                     if incoming.get("source_type") == "blob" and not incoming.get("blob"):
                         cfg["blob"] = {k: incoming[k] for k in ("account_name", "container", "key", "selected_blobs", "prefix", "delimiter", "file_type") if k in incoming}
+                        if preserved_blob_key and not (cfg.get("blob") or {}).get("key"):
+                            cfg["blob"]["key"] = preserved_blob_key
                     if cfg.get("sql") or cfg.get("blob") or cfg.get("local"):
                         cfg["source_type"] = "multi" if sum(1 for k in ("sql", "blob", "local") if cfg.get(k)) > 1 else (
                             "sql" if cfg.get("sql") else "blob" if cfg.get("blob") else "local"
@@ -436,6 +469,14 @@ def edit(domain_id, flow_id):
                 if not name:
                     name = flow.get("name")
                 to_save = persist_flow_config(cfg, existing=flow.get("config"))
+                existing_cfg = flow.get("config") or {}
+                blob_key = (cfg.get("blob") or {}).get("key", "").strip()
+                if to_save.get("blob"):
+                    if blob_key:
+                        secret = current_app.config.get("SECRET_KEY")
+                        to_save["blob"]["blob_key_encrypted"] = _encrypt_blob_key(secret, blob_key)
+                    elif (existing_cfg.get("blob") or {}).get("blob_key_encrypted"):
+                        to_save["blob"]["blob_key_encrypted"] = existing_cfg["blob"]["blob_key_encrypted"]
                 update_flow(current_app, flow_id, name, to_save)
             session.pop(SESSION_FLOW_CONFIG, None)
             session.pop(SESSION_TEMP_DIR, None)
@@ -451,6 +492,14 @@ def edit(domain_id, flow_id):
     # Seed session from saved flow so step 1/2/3 show configured source without re-entering
     if not session.get(SESSION_FLOW_CONFIG) and flow.get("config"):
         session[SESSION_FLOW_CONFIG] = copy.deepcopy(flow["config"])
+        # Inject decrypted blob key so dry run on step 2 can use it without re-entry
+        cfg = session[SESSION_FLOW_CONFIG]
+        if cfg.get("blob") and isinstance(cfg["blob"], dict) and cfg["blob"].get("blob_key_encrypted"):
+            decrypted = _decrypt_blob_key(current_app.config.get("SECRET_KEY"), cfg["blob"]["blob_key_encrypted"])
+            if decrypted:
+                cfg["blob"] = dict(cfg["blob"])
+                cfg["blob"]["key"] = decrypted
+                del cfg["blob"]["blob_key_encrypted"]
     if session.get(SESSION_FLOW_CONFIG) and not session.get(SESSION_TEMP_DIR):
         session[SESSION_TEMP_DIR] = ""
     flow_config = session.get(SESSION_FLOW_CONFIG) or {}
@@ -541,7 +590,8 @@ def _run_flow_full_data(app, domain_id, flow_id, cfg, blob_key_from_request=None
 
 @flows_bp.route("/<int:flow_id>/run", methods=["POST"])
 def run_flow(domain_id, flow_id):
-    """Run flow on full data (export all rows, then Delphix masking). Accepts JSON body with optional blob_key."""
+    """Run flow on full data (export all rows, then Delphix masking). Accepts JSON body with optional blob_key.
+    Reuses saved (encrypted) blob key from flow config when not provided."""
     domain = get_domain(current_app, domain_id)
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
@@ -549,6 +599,14 @@ def run_flow(domain_id, flow_id):
     if not flow or flow["domain_id"] != domain_id:
         return jsonify({"ok": False, "error": "Flow not found"}), 404
     cfg = copy.deepcopy(flow.get("config") or {})
+    # Inject decrypted blob key from saved config when present
+    if cfg.get("blob") and isinstance(cfg["blob"], dict) and cfg["blob"].get("blob_key_encrypted"):
+        secret = current_app.config.get("SECRET_KEY")
+        decrypted = _decrypt_blob_key(secret, cfg["blob"].get("blob_key_encrypted"))
+        if decrypted:
+            cfg["blob"] = dict(cfg["blob"])
+            cfg["blob"]["key"] = decrypted
+            del cfg["blob"]["blob_key_encrypted"]
     from app.services.flow_config_sources import get_source_blocks
     sql_block, blob_block, local_block = get_source_blocks(cfg, "")
     if not sql_block and not blob_block:
@@ -557,14 +615,16 @@ def run_flow(domain_id, flow_id):
             "error": "Flow has no runnable source (SQL or Blob). Local file flows cannot be run from here.",
         }), 400
     blob_key = (request.get_json(silent=True) or {}).get("blob_key", "").strip()
-    if blob_block and not blob_key:
-        return jsonify({
-            "ok": False,
-            "error": "Storage account key required for Blob source. Provide blob_key in request body.",
-        }), 400
     if blob_block:
         cfg["blob"] = dict(cfg.get("blob") or {})
-        cfg["blob"]["key"] = blob_key
+        if blob_key:
+            cfg["blob"]["key"] = blob_key
+        elif not cfg["blob"].get("key"):
+            return jsonify({
+                "ok": False,
+                "error": "Storage account key required for Blob source. Provide blob_key in request body or save the key when creating the flow.",
+            }), 400
+    blob_key = cfg.get("blob", {}).get("key") if blob_block else None
     app = current_app._get_current_object()
     thread = threading.Thread(
         target=_run_flow_full_data,

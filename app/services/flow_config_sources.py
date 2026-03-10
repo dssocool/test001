@@ -94,6 +94,19 @@ def get_source_blocks(cfg, session_temp_dir):
     if local_block and local_block.get("temp_dir") and not os.path.isdir(local_block["temp_dir"]):
         local_block = None
 
+    # Discard incomplete blocks so dry run does not run SQL with no tables when only Blob is configured
+    if sql_block:
+        mode = sql_block.get("export_mode") or "tables"
+        if mode == "tables":
+            if not (sql_block.get("tables")):
+                sql_block = None
+        else:
+            if not (sql_block.get("query") or "").strip():
+                sql_block = None
+    if blob_block:
+        if not (blob_block.get("selected_blobs")):
+            blob_block = None
+
     return sql_block, blob_block, local_block
 
 

@@ -91,11 +91,11 @@
             <div class="field-row">
               <div class="field-group">
                 <label for="sql-server">Server Address</label>
-                <input type="text" id="sql-server" name="sql_server" placeholder="Server Address" value="{{ flow_config.server|default('', true)|e }}">
+                <input type="text" id="sql-server" name="sql_server" placeholder="Server Address" value="{{ ((flow_config.get('sql') or {}).get('server') or flow_config.get('server') or '')|e }}">
               </div>
               <div class="field-group">
                 <label for="sql-database">Database Name</label>
-                <input type="text" id="sql-database" name="sql_database" placeholder="Database Name" value="{{ flow_config.database|default('', true)|e }}">
+                <input type="text" id="sql-database" name="sql_database" placeholder="Database Name" value="{{ ((flow_config.get('sql') or {}).get('database') or flow_config.get('database') or '')|e }}">
               </div>
             </div>
             <div class="field-group">
@@ -109,50 +109,53 @@
               <button type="button" id="sql-validate" class="btn">Test Connection</button>
             </div>
             <span id="sql-validate-msg" class="error"></span>
-            <div id="sql-after-validate" style="display:{% if flow_config.source_type == 'sql' and (flow_config.server or flow_config.database) %}block{% else %}none{% endif %}; margin-top:1rem;">
-              <label><input type="radio" name="sql-mode" value="tables" {% if flow_config.get('export_mode', 'tables') != 'query' %}checked{% endif %}> By Table</label>
-              <label><input type="radio" name="sql-mode" value="query" {% if flow_config.get('export_mode') == 'query' %}checked{% endif %}> By Query</label>
-              <div id="sql-tables-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}none{% else %}block{% endif %};">
+            {% set _sql = flow_config.get('sql') or {} %}
+            {% set _export_mode = _sql.get('export_mode') or flow_config.get('export_mode') or 'tables' %}
+            <div id="sql-after-validate" style="display:{% if (_sql.get('server') or flow_config.get('server')) and (_sql.get('database') or flow_config.get('database')) %}block{% else %}none{% endif %}; margin-top:1rem;">
+              <label><input type="radio" name="sql-mode" value="tables" {% if _export_mode != 'query' %}checked{% endif %}> By Table</label>
+              <label><input type="radio" name="sql-mode" value="query" {% if _export_mode == 'query' %}checked{% endif %}> By Query</label>
+              <div id="sql-tables-box" style="margin-top:0.5rem; display:{% if _export_mode == 'query' %}none{% else %}block{% endif %};">
                 <label>Select tables</label>
                 <p class="step1-multi-hint" style="margin:0 0 0.25rem; font-size:0.85rem; color:#5f6368;">You can select multiple tables; each is exported to CSV and included in the dry run.</p>
                 <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
               </div>
-              <div id="sql-query-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}block{% else %}none{% endif %};">
+              <div id="sql-query-box" style="margin-top:0.5rem; display:{% if _export_mode == 'query' %}block{% else %}none{% endif %};">
                 <label>Query</label>
-                <textarea id="sql-query" placeholder="SELECT * FROM ...">{{ flow_config.query|default('', true)|e }}</textarea>
+                <textarea id="sql-query" placeholder="SELECT * FROM ...">{{ _sql.get('query') or flow_config.get('query') or ''|e }}</textarea>
               </div>
             </div>
           </div>
         </div>
 
+        {% set _blob = flow_config.get('blob') or {} %}
         <div id="panel-blob" class="source-panel {% if flow_config.source_type == 'blob' %}active{% endif %}">
           <div class="connection-parameters">
             <h3 class="connection-parameters-title">Connection parameters</h3>
             <div class="field-row">
               <div class="field-group">
                 <label for="blob-account">Account name</label>
-                <input type="text" id="blob-account" placeholder="Storage account name" value="{{ flow_config.account_name|default('', true)|e }}">
+                <input type="text" id="blob-account" placeholder="Storage account name" value="{{ _blob.get('account_name') or flow_config.get('account_name') or ''|e }}">
               </div>
               <div class="field-group">
                 <label for="blob-container">Container name</label>
-                <input type="text" id="blob-container" placeholder="Container name" value="{{ flow_config.container|default('', true)|e }}">
+                <input type="text" id="blob-container" placeholder="Container name" value="{{ _blob.get('container') or flow_config.get('container') or ''|e }}">
               </div>
               <div class="field-group">
                 <label for="blob-key">Account key</label>
-                <input type="password" id="blob-key" placeholder="Account key">
+                <input type="password" id="blob-key" placeholder="Account key (leave blank if saved)">
               </div>
               <div class="validate-btn-wrap">
                 <button type="button" id="blob-validate" class="btn">Test Connection</button>
               </div>
             </div>
             <span id="blob-validate-msg" class="error"></span>
-            <div id="blob-after-validate" style="display:{% if flow_config.source_type == 'blob' and flow_config.get('selected_blobs') %}block{% else %}none{% endif %}; margin-top:1rem;">
+            <div id="blob-after-validate" style="display:{% if (_blob.get('account_name') or flow_config.get('account_name')) and (_blob.get('selected_blobs') or flow_config.get('selected_blobs')) %}block{% else %}none{% endif %}; margin-top:1rem;">
               <label>File type</label>
               <select id="blob-file-type"><option value="csv">CSV</option></select>
               <label>Prefix (optional)</label>
-              <input type="text" id="blob-prefix" placeholder="e.g. data/" value="{{ flow_config.prefix|default('', true)|e }}">
+              <input type="text" id="blob-prefix" placeholder="e.g. data/" value="{{ _blob.get('prefix') or flow_config.get('prefix') or ''|e }}">
               <label>Delimiter</label>
-              <input type="text" id="blob-delimiter" value="{{ flow_config.delimiter|default(',', true)|e }}" maxlength="2">
+              <input type="text" id="blob-delimiter" value="{{ _blob.get('delimiter') or flow_config.get('delimiter') or ','|e }}" maxlength="2">
               <label>Select files</label>
               <p class="step1-multi-hint" style="margin:0 0 0.25rem; font-size:0.85rem; color:#5f6368;">You can select multiple files; each is included in the dry run.</p>
               <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
@@ -665,7 +668,7 @@
     return false;
   }
   function blobBlockComplete(b) {
-    if (!b || !b.account_name || !b.container || !b.key) return false;
+    if (!b || !b.account_name || !b.container) return false;
     return b.selected_blobs && b.selected_blobs.length > 0;
   }
   function hasSourceConfigured() {
