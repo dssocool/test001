@@ -252,6 +252,35 @@
       div.textContent = s;
       return div.innerHTML;
     }
+    /** Parse fetch response as JSON; on non-OK or non-JSON body, throw with status and body so user sees real error. */
+    function parseJsonResponse(r) {
+      return r.text().then(function(text) {
+        if (!r.ok) {
+          var snippet = text.length > 500 ? text.slice(0, 500) + '\u2026' : text;
+          var err = new Error('HTTP ' + r.status + (r.statusText ? ' ' + r.statusText : '') + ' \u2014 ' + snippet.replace(/\s+/g, ' ').trim());
+          err.status = r.status;
+          err.body = text;
+          console.error('HTTP error response:', r.status, r.statusText, text);
+          throw err;
+        }
+        var ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (text.trim() && !ct.includes('json')) {
+          var snippet = text.length > 300 ? text.slice(0, 300) + '\u2026' : text;
+          var err = new Error('Expected JSON but server returned: ' + snippet.replace(/\s+/g, ' ').trim());
+          err.body = text;
+          console.error('Non-JSON response:', text);
+          throw err;
+        }
+        try {
+          return text ? JSON.parse(text) : {};
+        } catch (e) {
+          var err = new Error('Invalid JSON: ' + (text.length > 200 ? text.slice(0, 200) + '\u2026' : text).replace(/\s+/g, ' ').trim());
+          err.body = text;
+          console.error('JSON parse error. Response body:', text);
+          throw err;
+        }
+      });
+    }
     function scramble(str) {
       if (str === null || str === undefined) return '';
       var s = String(str);
@@ -395,7 +424,7 @@
         var mr = getDryRunRows();
         var url = '/api/dry-run/masked-file?blob_name=' + encodeURIComponent(blobName) + '&max_rows=' + encodeURIComponent(String(mr)) + (delimiterParam ? '&delimiter=' + encodeURIComponent(delimiterParam) : '');
         fetch(url)
-          .then(function(r) { return r.json(); })
+          .then(parseJsonResponse)
           .then(function(maskData) {
             if (maskData.ok && maskData.rows && maskData.rows.length) {
               file.maskedRows = maskData.rows;
@@ -426,11 +455,12 @@
       container.innerHTML = '<p>Loading data…</p>';
       var url = '/api/dry-run/files?temp_dir=' + encodeURIComponent(tempDir) + '&max_rows=' + encodeURIComponent(String(maxRows));
       fetch(url)
-        .then(function(r) { return r.json(); })
+        .then(parseJsonResponse)
         .then(onDataLoaded)
         .catch(function(err) {
           if (triggerBtn) triggerBtn.disabled = false;
           container.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+          if (err.body) console.error('Dry-run files response body:', err.body);
         });
     }
     function runDryRun() {
@@ -443,7 +473,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ max_rows: maxRows })
         })
-          .then(function(r) { return r.json(); })
+          .then(parseJsonResponse)
           .then(function(data) {
             if (data.ok && data.delphix) {
               if (data.temp_dir) tempDir = data.temp_dir;
@@ -459,6 +489,7 @@
           .catch(function(err) {
             if (triggerBtn) triggerBtn.disabled = false;
             container.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+            if (err.body) console.error('Dry run response body:', err.body);
           });
         return;
       }
@@ -470,7 +501,7 @@
       if (triggerBtn) triggerBtn.disabled = true;
       container.innerHTML = '<p>Running synthetic data generation…</p>';
       fetch(runDryRunUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        .then(function(r) { return r.json(); })
+        .then(parseJsonResponse)
         .then(function(data) {
           if (data.ok && data.delphix) {
             blobNames = data.delphix.blob_names || [];
@@ -485,6 +516,7 @@
         .catch(function(err) {
           if (triggerBtn) triggerBtn.disabled = false;
           container.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+          if (err.body) console.error('Dry run response body:', err.body);
         });
     }
     var rowsSlider = document.getElementById('dry-run-rows-slider');
@@ -523,7 +555,7 @@
       columnsEl.innerHTML = '<p>Loading field metadata…</p>';
       document.getElementById('rule-setup-modal-overlay').style.display = 'flex';
       fetch('/api/delphix/file-field-metadata?file_format_id=' + encodeURIComponent(fileFormatId))
-        .then(function(r) { return r.json(); })
+        .then(parseJsonResponse)
         .then(function(data) {
           if (!data.ok) {
             columnsEl.innerHTML = '<p class="error">' + escapeHtml(data.error || 'Failed to load field metadata') + '</p>';
@@ -546,6 +578,7 @@
         })
         .catch(function(err) {
           columnsEl.innerHTML = '<p class="error">' + escapeHtml(err.message || 'Request failed') + '</p>';
+          if (err.body) console.error('File field metadata response body:', err.body);
         });
     }
     function closeRuleModal() {
@@ -799,7 +832,7 @@
         updateSqlConfig();
       } else {
         fetch('/api/sql/tables?server=' + encodeURIComponent(flowConfigPrefill.server) + '&database=' + encodeURIComponent(flowConfigPrefill.database))
-          .then(function(r) { return r.json(); })
+          .then(parseJsonResponse)
           .then(function(d) {
             if (d.ok && d.tables) {
               var sel = document.getElementById('sql-tables');
@@ -880,7 +913,7 @@
       fd.append('file', file);
       uploadFileBtn.disabled = true;
       fetch(uploadLocalUrl, { method: 'POST', body: fd })
-        .then(function(r) { return r.json(); })
+        .then(parseJsonResponse)
         .then(function(data) {
           uploadFileBtn.disabled = false;
           if (data.ok) {
@@ -915,6 +948,7 @@
             uploadedFilenameEl.removeAttribute('hidden');
             uploadedFilenameEl.classList.add('error');
           }
+          if (err.body) console.error('Upload response body:', err.body);
         });
       localFileInput.value = '';
     });
@@ -927,7 +961,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file_type: fileType })
-      }).then(function(r) { return r.json(); }).catch(function() {});
+      }).then(parseJsonResponse).catch(function(err) { if (err && err.body) console.error('Update local config response:', err.body); });
     });
   }
 
@@ -959,7 +993,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ server: server, database: database })
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(parseJsonResponse).then(function(data) {
       if (data.ok) {
         msg.textContent = 'Connected.';
         msg.className = 'success';
@@ -969,7 +1003,7 @@
         step1Config.sql.database = database;
         updateSqlConfig();
         fetch('/api/sql/tables?server=' + encodeURIComponent(server) + '&database=' + encodeURIComponent(database))
-          .then(function(r) { return r.json(); })
+          .then(parseJsonResponse)
           .then(function(d) {
             if (d.ok && d.tables) {
               var sel = document.getElementById('sql-tables');
@@ -990,6 +1024,7 @@
     }).catch(function(e) {
       msg.textContent = e.message || 'Request failed';
       msg.className = 'error';
+      if (e.body) console.error('SQL validate response body:', e.body);
     });
   });
 
@@ -1003,7 +1038,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ account_name: account, container: container, key: key })
-    }).then(function(r) { return r.json(); }).then(function(data) {
+    }).then(parseJsonResponse).then(function(data) {
       if (data.ok) {
         msg.textContent = 'Connected. ' + (data.blobs && data.blobs.length) + ' file(s) found.';
         msg.className = 'success';
@@ -1024,6 +1059,7 @@
     }).catch(function(e) {
       msg.textContent = e.message || 'Request failed';
       msg.className = 'error';
+      if (e.body) console.error('Blob validate response body:', e.body);
     });
   });
 
