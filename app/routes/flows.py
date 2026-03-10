@@ -294,6 +294,12 @@ def new(domain_id):
             session.pop(SESSION_TEMP_DIR, None)
             return redirect(url_for("main_bp.index"), code=303)
 
+    # Starting a brand-new flow from main page: clear session so step 1 is blank (no prior upload/config)
+    if request.args.get("fresh"):
+        session.pop(SESSION_FLOW_CONFIG, None)
+        session.pop(SESSION_TEMP_DIR, None)
+        return redirect(url_for("flows_bp.new", domain_id=domain_id), code=303)
+
     step = request.args.get("step", type=int, default=1)
     flow_config = session.get(SESSION_FLOW_CONFIG) or {}
     temp_dir = session.get(SESSION_TEMP_DIR) or ""

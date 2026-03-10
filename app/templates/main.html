@@ -51,7 +51,7 @@
       {% endfor %}
     </ul>
     <div class="domain-card-footer">
-      <a href="{{ url_for('flows_bp.new', domain_id=domain.id) }}" class="btn btn-create-flow">Create New Data Flow</a>
+      <a href="{{ url_for('flows_bp.new', domain_id=domain.id, fresh=1) }}" class="btn btn-create-flow">Create New Data Flow</a>
     </div>
   </article>
   {% endfor %}
