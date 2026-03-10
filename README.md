@@ -51,11 +51,13 @@ To hide the console window, set `console=False` in the `.spec` file under `EXE(.
 1. Create a Python 3.10 or 3.11 App Service (e.g. Linux).
 2. **App settings** (Configuration → Application settings):
    - `RUNNING_ON_AZURE` = `1` (or rely on default `WEBSITE_SITE_NAME`)
-   - `MSAL_CLIENT_ID` = Azure AD app (client) ID
-   - `MSAL_CLIENT_SECRET` = client secret
-   - `MSAL_TENANT_ID` = tenant ID (or `common`)
    - `SECRET_KEY` = random secret for Flask session
-3. **Azure AD app registration**:
+   - **Option A – Easy Auth only (recommended if you use App Service Authentication):**  
+     Enable **Authentication** in the portal (Microsoft identity platform). No MSAL env vars needed.  
+     The app reads `X-MS-CLIENT-PRINCIPAL` and `/logout` redirects to `/.auth/logout`.
+   - **Option B – MSAL in the app:**  
+     `MSAL_CLIENT_ID`, `MSAL_CLIENT_SECRET`, `MSAL_TENANT_ID` — app handles `/login` and `/redirect` itself.
+3. **Azure AD (only if using MSAL in app)**:
    - Register an app; add redirect URI: `https://<your-app>.azurewebsites.net/redirect`
    - Create a client secret; grant admin consent if needed.
 4. **Startup command**:  
@@ -64,7 +66,8 @@ To hide the console window, set `console=False` in the `.spec` file under `EXE(.
    `gunicorn -w 4 -b 0.0.0.0:$PORT "app:create_app()"`
 5. Deploy code (e.g. zip deploy, GitHub Actions, or VS Code). Ensure `requirements.txt` is at repo root.
 
-Users will be redirected to Azure AD login when they open the app.
+With **Easy Auth**, Azure redirects unauthenticated users before requests hit the app.  
+With **MSAL**, the app redirects to `/login` and Azure AD as before.
 
 ## Configuration
 

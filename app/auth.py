@@ -1,6 +1,13 @@
 """
-MSAL-based auth when running on Azure. No-op when running locally.
+Azure auth when running on App Service.
+
+Two modes:
+1. **MSAL** – app handles OAuth redirect (/login, /redirect). Requires MSAL_CLIENT_ID etc.
+2. **Easy Auth** – platform handles auth; app reads X-MS-CLIENT-PRINCIPAL and optional
+   X-MS-CLIENT-PRINCIPAL-NAME / X-MS-CLIENT-PRINCIPAL-ID. No MSAL required.
 """
+import base64
+import json
 import uuid
 from flask import redirect, url_for, session, request, current_app
 
@@ -19,8 +26,111 @@ def _redirect_uri():
     return request.host_url.rstrip("/") + current_app.config["MSAL_REDIRECT_PATH"]
 
 
+def _principal_claims_dict(principal_json):
+    """Build typ -> val from Easy Auth principal claims list."""
+    claims = principal_json.get("claims") if isinstance(principal_json, dict) else None
+    if not isinstance(claims, list):
+        return {}
+    out = {}
+    for c in claims:
+        if isinstance(c, dict) and c.get("typ") is not None:
+            out[c["typ"]] = c.get("val")
+    return out
+
+
+def _session_user_from_easy_auth():
+    """
+    Populate session['user'] from App Service Easy Auth headers.
+    Returns True if user was set from headers.
+    """
+    # Optional short-circuit headers (when platform forwards them)
+    principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+    principal_name = request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME")
+
+    b64 = request.headers.get("X-MS-CLIENT-PRINCIPAL")
+    if b64:
+        try:
+            raw = base64.b64decode(b64)
+            principal = json.loads(raw.decode("utf-8"))
+        except (ValueError, json.JSONDecodeError, OSError):
+            principal = None
+        if isinstance(principal, dict):
+            claims = _principal_claims_dict(principal)
+            # Common claim type URIs and short names
+            oid = (
+                claims.get("oid")
+                or claims.get("http://schemas.microsoft.com/identity/claims/objectidentifier")
+                or principal_id
+            )
+            preferred_username = (
+                claims.get("preferred_username")
+                or claims.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn")
+                or claims.get("email")
+                or principal_name
+            )
+            name = claims.get("name") or preferred_username or principal_name
+            session["user"] = {
+                "oid": oid,
+                "preferred_username": preferred_username,
+                "name": name,
+            }
+            return True
+
+    # Headers without full principal (some configs only forward ID/NAME)
+    if principal_id or principal_name:
+        session["user"] = {
+            "oid": principal_id,
+            "preferred_username": principal_name,
+            "name": principal_name or principal_id,
+        }
+        return True
+
+    return False
+
+
+def init_easy_auth(app):
+    """
+    Easy Auth only: sync session from platform headers; logout goes to /.auth/logout.
+    Call when IS_AZURE and MSAL is not configured.
+    """
+    from flask import Blueprint
+
+    auth_bp = Blueprint("auth_bp", __name__)
+
+    @auth_bp.route("/login")
+    def login():
+        # Delegate to platform login (path configurable; default Entra ID)
+        path = app.config.get("EASY_AUTH_LOGIN_PATH") or "/.auth/login/aad"
+        return redirect(path)
+
+    @auth_bp.route("/logout")
+    def logout():
+        session.clear()
+        # Easy Auth logout; post_logout_redirect_uri must be allowed in App Service auth settings
+        base = request.host_url.rstrip("/")
+        return redirect(
+            "/.auth/logout?post_logout_redirect_uri=" + base + "/"
+        )
+
+    @app.before_request
+    def easy_auth_sync_session():
+        if not app.config.get("IS_AZURE"):
+            return
+        if request.endpoint and request.endpoint.startswith("auth_bp."):
+            return
+        # Platform already rejected unauthenticated users if "require authentication" is on.
+        # If request reached here with principal headers, mirror into session for app code.
+        if not session.get("user"):
+            _session_user_from_easy_auth()
+        # Do not redirect to /login here — Easy Auth handles gate; missing user means
+        # anonymous allowed at platform level or internal probe; leave as-is.
+
+    app.register_blueprint(auth_bp)
+    return auth_bp
+
+
 def init_auth(app):
-    """Register auth routes and before_request when IS_AZURE."""
+    """MSAL: register auth routes and before_request when IS_AZURE."""
     from flask import Blueprint
     auth_bp = Blueprint("auth_bp", __name__)
 

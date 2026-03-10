@@ -13,8 +13,10 @@ class Config:
         MSAL_CLIENT_ID = os.environ.get("MSAL_CLIENT_ID", "")
         MSAL_CLIENT_SECRET = os.environ.get("MSAL_CLIENT_SECRET", "")
         MSAL_TENANT_ID = os.environ.get("MSAL_TENANT_ID", "common")
-        # Redirect URI for Azure AD (e.g. https://<app>.azurewebsites.net/redirect)
+        # Redirect URI for Azure AD (e.g. https://<your-app>.azurewebsites.net/redirect)
         MSAL_REDIRECT_PATH = "/redirect"
+        # Easy Auth platform login path (Entra ID default; override if using another provider)
+        EASY_AUTH_LOGIN_PATH = os.environ.get("EASY_AUTH_LOGIN_PATH", "/.auth/login/aad")
         SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24).hex())
     else:
         HOST = "127.0.0.1"

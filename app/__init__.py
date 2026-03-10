@@ -22,10 +22,14 @@ def create_app(config_overrides=None):
     from app.models import init_db
     init_db(app)
 
-    # Only enable Azure auth when running on Azure and MSAL is configured
-    if app.config.get("IS_AZURE") and app.config.get("MSAL_CLIENT_ID"):
-        from app.auth import init_auth
-        init_auth(app)
+    # Azure auth: MSAL in-app flow, or Easy Auth (platform) without MSAL
+    if app.config.get("IS_AZURE"):
+        if app.config.get("MSAL_CLIENT_ID"):
+            from app.auth import init_auth
+            init_auth(app)
+        else:
+            from app.auth import init_easy_auth
+            init_easy_auth(app)
 
     from app.routes.main import main_bp
     from app.routes.domains import domains_bp
