@@ -89,8 +89,12 @@ def _handle_step1_local_upload(domain_id):
     )
     if not ok:
         return False
+    prev = session.get(SESSION_FLOW_CONFIG) or {}
+    # Merge into existing multi-source config if present
     session[SESSION_FLOW_CONFIG] = {
+        **{k: v for k, v in prev.items() if k not in ("source_type", "upload_name", "file_type", "delimiter", "has_header", "end_of_record", "detected_file_type", "detected_delimiter", "detected_has_header", "detected_end_of_record")},
         "source_type": "local",
+        "use_local": True,
         "upload_name": f.filename,
         "file_type": file_type,
         "delimiter": delimiter,
@@ -107,7 +111,7 @@ def _handle_step1_local_upload(domain_id):
 
 @flows_bp.route("/upload-local", methods=["POST"])
 def upload_local(domain_id):
-    """Upload a local file for Option B; sets session and returns JSON. Does not redirect. Delphix is called on the next page."""
+    """Upload a local file (Local file source tab); sets session and returns JSON. Does not redirect."""
     domain = get_domain(current_app, domain_id)
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
@@ -138,7 +142,7 @@ def update_local_config(domain_id):
     if not domain:
         return jsonify({"ok": False, "error": "Domain not found"}), 404
     cfg = session.get(SESSION_FLOW_CONFIG) or {}
-    if cfg.get("source_type") != "local":
+    if not cfg.get("use_local") and cfg.get("source_type") != "local":
         return jsonify({"ok": False, "error": "Not a local file flow"}), 400
     data = request.get_json(silent=True) or {}
     if "file_type" in data:
@@ -176,8 +180,26 @@ def run_dry_run(domain_id):
         except (TypeError, ValueError):
             pass
 
+    def _is_multi_source(c):
+        n = sum(1 for k in ("use_sql", "use_blob", "use_local") if c.get(k))
+        return n >= 2
+
+    temp_base = current_app.config["TEMP_BASE"]
+
+    # Multi-source: merge SQL + blob + local into one temp_dir, then Delphix once
+    if _is_multi_source(cfg):
+        local_dir = temp_dir if cfg.get("use_local") else None
+        from app.services.merge_dry_run import merge_dry_run_sources
+        ok, result = merge_dry_run_sources(cfg, max_rows, temp_base, local_temp_dir=local_dir)
+        if not ok:
+            return jsonify({"ok": False, "error": result}), 400
+        temp_dir = result
+        session[SESSION_TEMP_DIR] = temp_dir
+        cfg["source_type"] = "multi"
+        session[SESSION_FLOW_CONFIG] = cfg
+
     # SQL with no temp_dir yet: fetch from SQL with max_rows, then run Delphix
-    if cfg.get("source_type") == "sql" and not temp_dir:
+    elif cfg.get("source_type") == "sql" and not temp_dir:
         server = cfg.get("server", "").strip()
         database = cfg.get("database", "").strip()
         export_mode = cfg.get("export_mode") or "tables"
@@ -190,7 +212,6 @@ def run_dry_run(domain_id):
         if export_mode == "query" and not query:
             return jsonify({"ok": False, "error": "Select at least one table or provide a query"}), 400
         from app.services.sql_source import fetch_sql_dry_run
-        temp_base = current_app.config["TEMP_BASE"]
         tables_or_query = tables if export_mode == "tables" else query
         ok, result = fetch_sql_dry_run(server, database, export_mode, tables_or_query, max_rows, temp_base)
         if not ok:
@@ -199,7 +220,7 @@ def run_dry_run(domain_id):
         session[SESSION_TEMP_DIR] = temp_dir
 
     # Blob with no temp_dir yet: fetch from blob with max_rows per file, then run Delphix
-    if cfg.get("source_type") == "blob" and not temp_dir:
+    elif cfg.get("source_type") == "blob" and not temp_dir:
         account_name = cfg.get("account_name", "").strip()
         container = cfg.get("container", "").strip()
         key = (cfg.get("key") or "").strip()
@@ -210,7 +231,6 @@ def run_dry_run(domain_id):
         if not selected_blobs:
             return jsonify({"ok": False, "error": "Select at least one file"}), 400
         from app.services.blob_source import fetch_blob_dry_run
-        temp_base = current_app.config["TEMP_BASE"]
         ok, result = fetch_blob_dry_run(
             account_name, container, key, selected_blobs, delimiter, max_rows, temp_base
         )
@@ -234,7 +254,7 @@ def run_dry_run(domain_id):
     cfg["delphix"] = result
     session[SESSION_FLOW_CONFIG] = cfg
     response = {"ok": True, "delphix": result}
-    if cfg.get("source_type") in ("sql", "blob"):
+    if cfg.get("source_type") in ("sql", "blob", "multi"):
         response["temp_dir"] = temp_dir
     return jsonify(response)
 

@@ -55,6 +55,42 @@ def persist_flow_config(cfg, existing=None):
         _merge_preserved(out, cfg, existing)
         return out
 
+    if source_type == "multi":
+        out = {"source_type": "multi"}
+        if cfg.get("use_sql"):
+            out["use_sql"] = True
+            out["server"] = (cfg.get("server") or "").strip()
+            out["database"] = (cfg.get("database") or "").strip()
+            out["export_mode"] = cfg.get("export_mode") or "tables"
+            if out["export_mode"] == "tables":
+                out["tables"] = list(cfg.get("tables") or [])
+                out["query"] = ""
+            else:
+                out["query"] = (cfg.get("query") or "").strip()
+                out["tables"] = []
+        if cfg.get("use_blob"):
+            out["use_blob"] = True
+            out["account_name"] = (cfg.get("account_name") or "").strip()
+            out["container"] = (cfg.get("container") or "").strip()
+            out["prefix"] = (cfg.get("prefix") or "").strip()
+            out["file_type"] = cfg.get("file_type") or "csv"
+            out["delimiter"] = cfg.get("delimiter") if cfg.get("delimiter") is not None else ","
+            out["selected_blobs"] = list(cfg.get("selected_blobs") or [])
+        if cfg.get("use_local"):
+            out["use_local"] = True
+            name = cfg.get("upload_name") or ""
+            if name:
+                name = os.path.basename(str(name))
+            out["upload_name"] = name
+        if cfg.get("delimiter") is not None and "delimiter" not in out:
+            out["delimiter"] = cfg.get("delimiter")
+        if "has_header" in cfg:
+            out["has_header"] = cfg.get("has_header")
+        if cfg.get("end_of_record") is not None:
+            out["end_of_record"] = cfg.get("end_of_record")
+        _merge_preserved(out, cfg, existing)
+        return out
+
     if source_type == "local":
         name = cfg.get("upload_name") or ""
         if name:

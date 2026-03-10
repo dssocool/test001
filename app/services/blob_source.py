@@ -30,8 +30,10 @@ def download_top10_rows(account_name, container, key, blob_names, delimiter, tem
     return download_top_n_rows(account_name, container, key, blob_names, delimiter, temp_dir, 10)
 
 
-def download_top_n_rows(account_name, container, key, blob_names, delimiter, temp_dir, n):
-    """Download each blob and write up to n+1 rows (header + n data rows) per file to temp_dir. Returns (True, files) or (False, error)."""
+def download_top_n_rows(account_name, container, key, blob_names, delimiter, temp_dir, n, filename_prefix=None):
+    """Download each blob and write up to n+1 rows (header + n data rows) per file to temp_dir.
+    If filename_prefix is set, files are named {prefix}_{idx}_{basename}.csv to avoid collisions when merging sources.
+    Returns (True, files) or (False, error)."""
     if not blob_names:
         return False, "No blobs selected"
     if n is None or n < 1:
@@ -41,7 +43,7 @@ def download_top_n_rows(account_name, container, key, blob_names, delimiter, tem
         client = _blob_client(account_name, key)
         container_client = client.get_container_client(container)
         files = []
-        for blob_name in blob_names:
+        for idx, blob_name in enumerate(blob_names):
             blob_client = container_client.get_blob_client(blob_name)
             data = blob_client.download_blob().readall()
             try:
@@ -57,6 +59,8 @@ def download_top_n_rows(account_name, container, key, blob_names, delimiter, tem
             safe_name = os.path.basename(blob_name) or blob_name.replace("/", "_")
             if not safe_name.lower().endswith(".csv"):
                 safe_name += ".csv"
+            if filename_prefix:
+                safe_name = f"{filename_prefix}_{idx}_{safe_name}"
             fpath = os.path.join(temp_dir, safe_name)
             with open(fpath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f, delimiter=delimiter)

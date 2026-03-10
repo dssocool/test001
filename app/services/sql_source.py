@@ -141,6 +141,64 @@ def export_query_top_n(server, database, query, temp_dir, n):
         return False, str(e)
 
 
+def export_tables_top_n_prefixed(server, database, table_list, temp_dir, n, prefix="sql"):
+    """Like export_tables_top_n but each file is named {prefix}_{safe_table}.csv for merge."""
+    if not table_list:
+        return False, "No tables selected"
+    if n is None or n < 1:
+        n = 1
+    try:
+        import pyodbc
+        conn = pyodbc.connect(_conn_str(server, database))
+        cur = conn.cursor()
+        files = []
+        for qual in table_list:
+            parts = qual.split(".", 1)
+            if len(parts) == 2:
+                schema, name = parts
+            else:
+                schema, name = "dbo", qual
+            safe_name = name.replace(" ", "_").replace(".", "_")
+            fpath = os.path.join(temp_dir, f"{prefix}_{safe_name}.csv")
+            cur.execute(f"SELECT TOP ({n}) * FROM [{schema}].[{name}]")
+            rows = cur.fetchall()
+            if rows:
+                with open(fpath, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([d[0] for d in cur.description])
+                    writer.writerows(rows)
+            else:
+                with open(fpath, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([d[0] for d in cur.description])
+            files.append({"name": os.path.basename(fpath), "path": fpath})
+        conn.close()
+        return True, files
+    except Exception as e:
+        return False, str(e)
+
+
+def export_query_top_n_prefixed(server, database, query, temp_dir, n, prefix="sql"):
+    """Like export_query_top_n but writes {prefix}_query_result.csv."""
+    if n is None or n < 1:
+        n = 1
+    try:
+        import pyodbc
+        conn = pyodbc.connect(_conn_str(server, database))
+        wrapped = f"SELECT TOP ({n}) * FROM ({query.strip().rstrip(';')}) AS t"
+        cur = conn.execute(wrapped)
+        fpath = os.path.join(temp_dir, f"{prefix}_query_result.csv")
+        rows = cur.fetchall()
+        with open(fpath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([d[0] for d in cur.description])
+            writer.writerows(rows)
+        conn.close()
+        return True, [{"name": os.path.basename(fpath), "path": fpath}]
+    except Exception as e:
+        return False, str(e)
+
+
 def fetch_sql_dry_run(server, database, export_mode, tables_or_query, max_rows, temp_base):
     """
     Create a temp dir, fetch from SQL (tables or query) with max_rows, write CSVs.
