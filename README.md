@@ -46,7 +46,7 @@ Browser opens at `http://127.0.0.1:5000`. No login.
 
 To hide the console window, set `console=False` in the `.spec` file under `EXE(...)`.
 
-## Azure App Service deployment
+## Azure App Service deployment (monolithic mode)
 
 1. Create a Python 3.10 or 3.11 App Service (e.g. Linux).
 2. **App settings** (Configuration → Application settings):
@@ -103,6 +103,30 @@ When the web app runs in Azure App Service but **cannot reach Delphix** directly
    ```
 
    The bridge must use a **full** config (including `base_url` and `auth_token`). See [delphix_config.example.json](delphix_config.example.json) for the `azure_queue` shape.
+
+## Split frontend/backend architecture (Azure Functions)
+
+The project can also run in a split architecture:
+
+- **Frontend**: existing Flask app (UI + auth) running via `run_azure.py` or `run_local.py`.
+- **Backend**: Azure Functions app in `backend/` that owns configuration, temp data, Azure Blob, and Delphix/queue integration.
+
+Key pieces:
+
+- `docs/backend_http_contract.md` – HTTP contract between frontend and backend, including how `user_id` is carried.
+- `backend/` – Azure Functions project:
+  - `host.json`, `requirements.txt`, `local.settings.example.json`
+  - `backend/functions/domains` and `backend/functions/flows` – per-user config backed by Azure Blob.
+  - `backend/shared/storage.py` – helpers for per-user Blob JSON storage.
+
+To enable the frontend to talk to the backend, set:
+
+- `BACKEND_BASE_URL` – base URL of the Functions app, e.g. `https://<funcapp>.azurewebsites.net/api`.
+
+The Flask app will then:
+
+- Derive a stable `user_id` from the current auth method (`app/auth.py`).
+- Call the backend with `X-User-Id: <user_id>` on each request instead of using local SQLite for domains/flows.
 
 ## Data sources
 
