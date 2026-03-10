@@ -1,6 +1,10 @@
 * { box-sizing: border-box; }
 body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
 
+/* Local mode: current Windows/OS user at top right */
+.local-user-bar { display: flex; justify-content: flex-end; align-items: center; padding: 0.35rem 1.25rem; background: #e8eaed; border-bottom: 1px solid #dadce0; font-size: 0.875rem; color: #5f6368; }
+.local-user-bar-username { font-weight: 500; color: #202124; }
+
 /* App layout: sidebar + main */
 .app-layout { display: flex; min-height: 100vh; }
 .sidebar { width: 220px; flex-shrink: 0; background: #e8eaed; border-right: 1px solid #dadce0; padding: 1rem 0; }

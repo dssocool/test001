@@ -47,4 +47,13 @@ def create_app(config_overrides=None):
     app.register_blueprint(dry_run_bp, url_prefix="/api/dry-run")
     app.register_blueprint(delphix_bp, url_prefix="/api/delphix")
 
+    @app.context_processor
+    def inject_local_username():
+        """When running locally (not Azure), expose current OS user for display in UI."""
+        if app.config.get("IS_AZURE"):
+            return {}
+        # Windows: USERNAME; Linux/macOS: USER (fallback USERNAME)
+        local_username = os.environ.get("USERNAME") or os.environ.get("USER") or ""
+        return {"local_username": local_username}
+
     return app
