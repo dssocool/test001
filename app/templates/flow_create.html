@@ -3,8 +3,10 @@
 {% block content %}
 {% if edit_flow_id %}
   {% set form_action = url_for('flows_bp.edit', domain_id=domain.id, flow_id=edit_flow_id) %}
+  {% set cancel_url = url_for('flows_bp.edit', domain_id=domain.id, flow_id=edit_flow_id, cancel=1) %}
 {% else %}
   {% set form_action = url_for('flows_bp.new', domain_id=domain.id) %}
+  {% set cancel_url = url_for('flows_bp.new', domain_id=domain.id, cancel=1) %}
 {% endif %}
 <div class="flow-page">
 <nav class="flow-breadcrumbs" aria-label="Breadcrumb">
@@ -112,6 +114,7 @@
               <label><input type="radio" name="sql-mode" value="query" {% if flow_config.get('export_mode') == 'query' %}checked{% endif %}> By Query</label>
               <div id="sql-tables-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}none{% else %}block{% endif %};">
                 <label>Select tables</label>
+                <p class="step1-multi-hint" style="margin:0 0 0.25rem; font-size:0.85rem; color:#5f6368;">You can select multiple tables; each is exported to CSV and included in the dry run.</p>
                 <select id="sql-tables" multiple size="6" style="width:100%; max-width:400px;"></select>
               </div>
               <div id="sql-query-box" style="margin-top:0.5rem; display:{% if flow_config.get('export_mode') == 'query' %}block{% else %}none{% endif %};">
@@ -151,6 +154,7 @@
               <label>Delimiter</label>
               <input type="text" id="blob-delimiter" value="{{ flow_config.delimiter|default(',', true)|e }}" maxlength="2">
               <label>Select files</label>
+              <p class="step1-multi-hint" style="margin:0 0 0.25rem; font-size:0.85rem; color:#5f6368;">You can select multiple files; each is included in the dry run.</p>
               <select id="blob-list" multiple size="6" style="width:100%; max-width:400px;"></select>
             </div>
           </div>
@@ -178,7 +182,7 @@
         </div><!-- .step1-panels-viewport -->
       </div>
       <div class="flow-form-actions step1-actions">
-        <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>
+        <a href="{{ cancel_url }}" class="btn btn-secondary">Cancel</a>
         <button type="submit" id="step1-next" class="btn btn-primary">Next: Dry Run</button>
       </div>
     </form>
@@ -211,6 +215,7 @@
   {% endif %}
   <div class="flow-form-actions">
     <a href="{{ form_action }}?step=1&amp;resume=1" class="btn btn-secondary">Back</a>
+    <a href="{{ cancel_url }}" class="btn btn-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">Next</button>
   </div>
 </form>
@@ -619,6 +624,7 @@
   <div class="flow-form-actions">
     <button type="submit" class="btn">{% if edit_flow_id %}Save changes{% else %}Confirm and save{% endif %}</button>
     <a href="{{ form_action }}?step=2" class="btn btn-secondary">Back</a>
+    <a href="{{ cancel_url }}" class="btn btn-secondary">Cancel</a>
   </div>
 </form>
 </div>

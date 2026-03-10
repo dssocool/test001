@@ -339,6 +339,12 @@ def new(domain_id):
             session.pop(SESSION_TEMP_DIR, None)
             return redirect(url_for("main_bp.index"), code=303)
 
+    # Cancel creation: clear wizard state and go home. Back from step 3 to step 2 does not clear session.
+    if request.args.get("cancel"):
+        session.pop(SESSION_FLOW_CONFIG, None)
+        session.pop(SESSION_TEMP_DIR, None)
+        return redirect(url_for("main_bp.index"), code=303)
+
     # Starting a brand-new flow from main page: clear session so step 1 is blank (no prior upload/config)
     if request.args.get("fresh"):
         session.pop(SESSION_FLOW_CONFIG, None)
@@ -433,6 +439,12 @@ def edit(domain_id, flow_id):
             session.pop(SESSION_FLOW_CONFIG, None)
             session.pop(SESSION_TEMP_DIR, None)
             return redirect(url_for("main_bp.index"), code=303)
+
+    # Cancel edit: clear wizard state and go home
+    if request.args.get("cancel"):
+        session.pop(SESSION_FLOW_CONFIG, None)
+        session.pop(SESSION_TEMP_DIR, None)
+        return redirect(url_for("main_bp.index"), code=303)
 
     step = request.args.get("step", type=int, default=1)
     # Seed session from saved flow so step 1/2/3 show configured source without re-entering
