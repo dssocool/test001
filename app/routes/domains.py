@@ -9,8 +9,14 @@ def new():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         description = request.form.get("description", "").strip()
+        data_generation_key = request.form.get("data_generation_key", "")
         if name:
-            create_domain(current_app, name, description=description)
+            create_domain(
+                current_app,
+                name,
+                description=description,
+                data_generation_key=data_generation_key,
+            )
         return redirect(url_for("main_bp.index"), code=303)
     return render_template("domain_create.html")
 
@@ -23,8 +29,15 @@ def edit(domain_id):
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         description = request.form.get("description", "").strip()
+        data_generation_key = request.form.get("data_generation_key", "")
         if name:
-            update_domain(current_app, domain_id, name, description=description)
+            update_domain(
+                current_app,
+                domain_id,
+                name,
+                description=description,
+                data_generation_key=data_generation_key,
+            )
         return redirect(url_for("main_bp.index"), code=303)
     return render_template("domain_edit.html", domain=domain)
 

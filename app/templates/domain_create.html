@@ -7,6 +7,9 @@
   <input type="text" id="name" name="name" required placeholder="e.g. Sales">
   <label for="description">Description (optional)</label>
   <textarea id="description" name="description" rows="3" placeholder="Brief description of this domain"></textarea>
+  <label for="data_generation_key">Data generation key (optional)</label>
+  <input type="text" id="data_generation_key" name="data_generation_key" placeholder="Any Unicode — affects dry-run masking rounds">
+  <p class="step-hint" style="margin-top:0.25rem;">Used when running a dry run: hashed to decide how many masking job rounds run (1–4).</p>
   <div class="form-actions">
     <button type="submit" class="btn">Save</button>
     <a href="{{ url_for('main_bp.index') }}" class="btn btn-secondary">Cancel</a>

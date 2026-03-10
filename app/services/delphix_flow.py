@@ -11,6 +11,7 @@ import time
 import uuid
 
 from app.services.azure_blob import upload_file
+from app.services.data_generation_key import masking_rounds_from_key
 from app.services.delphix_client import DelphixClient, DelphixClientError, load_delphix_config
 
 # Temp header files created for Delphix file format have names like {base}_{8 hex}.csv
@@ -71,15 +72,16 @@ def _write_header_file(data_path, temp_dir, delimiter, has_header=True):
         return None
 
 
-def run_delphix_flow(temp_dir, flow_config, instance_path):
+def run_delphix_flow(temp_dir, flow_config, instance_path, data_generation_key=None):
     """
     Run the full Delphix sequence: build header files, create file formats (one per CSV),
     one ruleset, upload files to Azure, create file metadata for each, create profile and
-    masking jobs, run both jobs. All IDs are returned for storing in flow config.
+    masking jobs, run profile once then run masking job N times (N from data_generation_key).
 
     Returns (True, result_dict) on success, or (False, error_message) on failure.
     result_dict has keys: file_format_ids, file_ruleset_id, profile_job_id, masking_job_id,
-    profile_execution_id, masking_execution_id (and optionally file_metadata_ids).
+    profile_execution_id, masking_execution_id (last run), masking_execution_ids (all runs),
+    masking_rounds, and optionally file_metadata_ids.
     """
     csv_files = _list_csv_files(temp_dir)
     if not csv_files:
@@ -211,28 +213,36 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
         if status in ("FAILED", "ERROR", "CANCELLED", "CANCELED"):
             return False, f"Profile job failed with status: {status}"
 
-    try:
-        run_masking = client.run_job(masking_job_id)
-        masking_execution_id = run_masking.get("execution_id")
-        if not masking_execution_id:
-            return False, "Delphix masking run response missing executionId"
-    except DelphixClientError as e:
-        return False, f"Delphix run masking job: {e}"
+    # 8) Run masking job N rounds (same job id; each run_job starts a new execution).
+    # N is derived from data_generation_key via deterministic hash mod 4 (see data_generation_key module).
+    masking_rounds = masking_rounds_from_key(data_generation_key)
+    masking_execution_ids = []
+    masking_execution_id = None
 
-    deadline = time.monotonic() + _EXECUTION_TIMEOUT_SECONDS
-    while True:
-        if time.monotonic() > deadline:
-            return False, "Masking job timed out"
-        time.sleep(1)
+    for round_index in range(masking_rounds):
         try:
-            exec_resp = client.get_execution(masking_execution_id)
+            run_masking = client.run_job(masking_job_id)
+            masking_execution_id = run_masking.get("execution_id")
+            if not masking_execution_id:
+                return False, "Delphix masking run response missing executionId"
         except DelphixClientError as e:
-            return False, f"Delphix get masking execution: {e}"
-        status = (exec_resp.get("status") or "").strip().upper()
-        if status in ("SUCCEEDED", "WARNING"):
-            break
-        if status in ("FAILED", "ERROR", "CANCELLED", "CANCELED"):
-            return False, f"Masking job failed with status: {status}"
+            return False, f"Delphix run masking job: {e}"
+
+        masking_execution_ids.append(masking_execution_id)
+        deadline = time.monotonic() + _EXECUTION_TIMEOUT_SECONDS
+        while True:
+            if time.monotonic() > deadline:
+                return False, "Masking job timed out"
+            time.sleep(1)
+            try:
+                exec_resp = client.get_execution(masking_execution_id)
+            except DelphixClientError as e:
+                return False, f"Delphix get masking execution: {e}"
+            status = (exec_resp.get("status") or "").strip().upper()
+            if status in ("SUCCEEDED", "WARNING"):
+                break
+            if status in ("FAILED", "ERROR", "CANCELLED", "CANCELED"):
+                return False, f"Masking job failed with status: {status}"
 
     result = {
         "file_format_ids": file_format_ids,
@@ -242,6 +252,8 @@ def run_delphix_flow(temp_dir, flow_config, instance_path):
         "masking_job_id": masking_job_id,
         "profile_execution_id": profile_execution_id,
         "masking_execution_id": masking_execution_id,
+        "masking_execution_ids": masking_execution_ids,
+        "masking_rounds": masking_rounds,
         "blob_names": blob_names,
     }
     return True, result

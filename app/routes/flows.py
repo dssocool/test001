@@ -220,7 +220,13 @@ def run_dry_run(domain_id):
     if not temp_dir:
         return jsonify({"ok": False, "error": "No temp data. Complete step 1 first."}), 400
 
-    ok, result = run_delphix_flow(temp_dir, cfg, current_app.config["INSTANCE_PATH"])
+    data_generation_key = domain.get("data_generation_key") or ""
+    ok, result = run_delphix_flow(
+        temp_dir,
+        cfg,
+        current_app.config["INSTANCE_PATH"],
+        data_generation_key=data_generation_key,
+    )
     if not ok:
         return jsonify({"ok": False, "error": result or "Delphix failed"}), 400
     cfg["delphix"] = result

@@ -57,12 +57,17 @@ def init_db(app):
         if "description" not in columns:
             db.execute("ALTER TABLE domain ADD COLUMN description TEXT DEFAULT ''")
             db.commit()
+        cur = db.execute("PRAGMA table_info(domain)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "data_generation_key" not in columns:
+            db.execute("ALTER TABLE domain ADD COLUMN data_generation_key TEXT DEFAULT ''")
+            db.commit()
 
 
 def get_domains_with_flows(app):
     db = get_db(app)
     cur = db.execute(
-        "SELECT id, name, description, created_at FROM domain ORDER BY name"
+        "SELECT id, name, description, data_generation_key, created_at FROM domain ORDER BY name"
     )
     domains = [dict(row) for row in cur.fetchall()]
     for d in domains:
@@ -77,11 +82,13 @@ def get_domains_with_flows(app):
     return domains
 
 
-def create_domain(app, name, description=""):
+def create_domain(app, name, description="", data_generation_key=None):
+    key = (data_generation_key if data_generation_key is not None else "") or ""
+    key = key.strip() if isinstance(key, str) else ""
     with db_connection(app) as db:
         cur = db.execute(
-            "INSERT INTO domain (name, description) VALUES (?, ?)",
-            (name, (description or "").strip()),
+            "INSERT INTO domain (name, description, data_generation_key) VALUES (?, ?, ?)",
+            (name, (description or "").strip(), key),
         )
         return cur.lastrowid
 
@@ -98,7 +105,7 @@ def create_flow(app, domain_id, name, config):
 def get_domain(app, domain_id):
     db = get_db(app)
     cur = db.execute(
-        "SELECT id, name, description, created_at FROM domain WHERE id = ?",
+        "SELECT id, name, description, data_generation_key, created_at FROM domain WHERE id = ?",
         (domain_id,),
     )
     row = cur.fetchone()
@@ -111,11 +118,13 @@ def get_flow_count(app, domain_id):
     return cur.fetchone()[0] or 0
 
 
-def update_domain(app, domain_id, name, description=""):
+def update_domain(app, domain_id, name, description="", data_generation_key=None):
+    key = (data_generation_key if data_generation_key is not None else "") or ""
+    key = key.strip() if isinstance(key, str) else ""
     with db_connection(app) as db:
         db.execute(
-            "UPDATE domain SET name = ?, description = ? WHERE id = ?",
-            (name, (description or "").strip(), domain_id),
+            "UPDATE domain SET name = ?, description = ?, data_generation_key = ? WHERE id = ?",
+            (name, (description or "").strip(), key, domain_id),
         )
 
 
